@@ -13,7 +13,7 @@ export default async function ProjectsPage() {
     return (
         <>
             <NavBar />
-            <main style={{ maxWidth: "700px", margin: "0 auto", padding: "3rem 2rem", position: "relative", zIndex: 2 }}>
+            <main className="content-page">
                 <h1 className="pixel-heading" style={{ fontSize: "1.5rem", marginBottom: "2rem" }}>
                     Projects
                 </h1>

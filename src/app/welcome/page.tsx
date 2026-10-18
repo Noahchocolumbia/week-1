@@ -6,7 +6,7 @@ import { getUserAndProfile, hasName } from "@/lib/supabase-server";
 export default async function WelcomePage({ searchParams }: PageProps<"/welcome">) {
     const { user, profile } = await getUserAndProfile();
     if (!user) redirect("/login");
-    if (hasName(profile)) redirect("/projects");
+    if (hasName(profile)) redirect("/rate");
 
     const { error } = await searchParams;
 

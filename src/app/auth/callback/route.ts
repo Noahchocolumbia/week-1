@@ -25,5 +25,5 @@ export async function GET(request: Request) {
         .maybeSingle<Profile>();
 
     // First-time users have no name yet, so ask for it.
-    return NextResponse.redirect(`${base}${hasName(profile) ? "/projects" : "/welcome"}`);
+    return NextResponse.redirect(`${base}${hasName(profile) ? "/rate" : "/welcome"}`);
 }

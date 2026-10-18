@@ -20,40 +20,45 @@ export default async function GeneratePage() {
     if (!user) redirect("/login");
     if (!hasName(profile)) redirect("/welcome");
 
-    // Every photo this user has uploaded, newest first, drafts included.
-    const { data, error } = await supabase
-        .from("images")
-        .select("id, storage_path, published, captions(id, content)")
-        .eq("profile_id", user.id)
-        .order("created_at", { ascending: false })
-        .returns<PhotoRow[]>();
+    // Every photo this user has uploaded, newest first, drafts included, plus everyone's totals.
+    const [{ data, error }, scores] = await Promise.all([
+        supabase
+            .from("images")
+            .select("id, storage_path, published, captions(id, content)")
+            .eq("profile_id", user.id)
+            .order("created_at", { ascending: false })
+            .returns<PhotoRow[]>(),
+        supabase.rpc("caption_scores"),
+    ]);
+    const scoreOf = new Map(
+        ((scores.data ?? []) as { caption_id: string; score: number; votes: number }[]).map((s) => [
+            s.caption_id,
+            { score: Number(s.score), votes: Number(s.votes) },
+        ])
+    );
 
     const photos: Photo[] = (data ?? []).map((row) => ({
         id: row.id,
         url: supabase.storage.from("photos").getPublicUrl(row.storage_path).data.publicUrl,
         published: row.published,
-        captions: row.captions,
+        captions: row.captions.map((c) => ({ ...c, ...(scoreOf.get(c.id) ?? { score: 0, votes: 0 }) })),
     }));
 
     return (
         <>
             <NavBar />
-            <main style={{ maxWidth: "560px", margin: "0 auto", padding: "3rem 2rem", position: "relative", zIndex: 2 }}>
-                <h1 className="pixel-heading" style={{ fontSize: "1.5rem", marginBottom: "1rem" }}>
-                    Generate
-                </h1>
-                <p style={{ color: "var(--text-dim)", marginBottom: "2rem", lineHeight: 1.6 }}>
-                    Upload a photo from around the city and the AI writes three captions for it. Adding a new
-                    photo never removes your old ones.
+            <main className="content-page">
+                <h1 className="pixel-heading page-title">Make a meme</h1>
+                <p className="page-intro">
+                    Pick a photo and the AI writes three captions. Keep the ones you like, then post them to
+                    the feed for everyone to vote on.
                 </p>
 
                 <div className="retro-card">
                     <PhotoUploader userId={user.id} />
                 </div>
 
-                <h2 className="pixel-heading" style={{ fontSize: "1rem", margin: "3rem 0 1.5rem" }}>
-                    Your photos
-                </h2>
+                <h2 className="pixel-heading section-title">Your memes</h2>
                 {error ? (
                     <p className="form-error">Something went wrong loading your photos.</p>
                 ) : photos.length === 0 ? (

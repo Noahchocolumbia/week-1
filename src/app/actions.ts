@@ -28,7 +28,7 @@ async function saveNames(formData: FormData) {
 
 export async function completeWelcome(formData: FormData) {
     const ok = await saveNames(formData);
-    redirect(ok ? "/projects" : "/welcome?error=1");
+    redirect(ok ? "/rate" : "/welcome?error=1");
 }
 
 export async function updateProfile(formData: FormData) {
@@ -61,6 +61,22 @@ export async function saveAvatarPath(path: string) {
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+// Downloads a photo from the public "photos" bucket and checks its type and size.
+async function readPhoto(supabase: Supabase, path: string) {
+    const { publicUrl } = supabase.storage.from("photos").getPublicUrl(path).data;
+    const res = await fetch(publicUrl);
+    if (!res.ok) return { ok: false as const, error: "read" as const };
+
+    const mimeType = (res.headers.get("content-type") ?? "").split(";")[0];
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (!PHOTO_TYPES.includes(mimeType) || bytes.length > MAX_PHOTO_BYTES) {
+        return { ok: false as const, error: "type" as const };
+    }
+    return { ok: true as const, bytes, mimeType };
+}
+
 export type GenerateResult = { ok: true; imageId: string } | { ok: false; error: string };
 
 // The browser has already uploaded the photo to the "photos" bucket.
@@ -85,15 +101,9 @@ export async function generateCaptions(path: string): Promise<GenerateResult> {
     }
 
     // Fetch the photo back from Storage so it can be sent to Gemini.
-    const { publicUrl } = supabase.storage.from("photos").getPublicUrl(path).data;
-    const photo = await fetch(publicUrl);
-    if (!photo.ok) return { ok: false, error: "Couldn't read the uploaded photo." };
-
-    const mimeType = (photo.headers.get("content-type") ?? "").split(";")[0];
-    const bytes = Buffer.from(await photo.arrayBuffer());
-    if (!PHOTO_TYPES.includes(mimeType) || bytes.length > MAX_PHOTO_BYTES) {
-        return discard("Use a JPEG, PNG or WebP photo under 5 MB.");
-    }
+    const photo = await readPhoto(supabase, path);
+    if (!photo.ok) return photo.error === "type" ? discard("Use a JPEG, PNG or WebP photo under 5 MB.") : { ok: false, error: "Couldn't read the uploaded photo." };
+    const { bytes, mimeType } = photo;
 
     let captions: string[];
     let model: string;
@@ -126,8 +136,9 @@ export async function generateCaptions(path: string): Promise<GenerateResult> {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Records the signed-in user's vote on a caption: 1 is an upvote, -1 a downvote.
-export async function castVote(captionId: string, vote: 1 | -1) {
+// Records the signed-in user's vote on a caption: 1 is an upvote, -1 a downvote,
+// and 0 takes their vote back.
+export async function castVote(captionId: string, vote: 1 | -1 | 0) {
     const supabase = await createClient();
     const {
         data: { user },
@@ -136,7 +147,18 @@ export async function castVote(captionId: string, vote: 1 | -1) {
 
     // Arguments come from the browser, so check them before using them.
     if (typeof captionId !== "string" || !UUID.test(captionId)) return { ok: false };
-    if (vote !== 1 && vote !== -1) return { ok: false };
+    if (vote !== 1 && vote !== -1 && vote !== 0) return { ok: false };
+
+    if (vote === 0) {
+        // RLS only lets a user delete their own vote rows.
+        const { error } = await supabase
+            .from("caption_votes")
+            .delete()
+            .eq("caption_id", captionId)
+            .eq("profile_id", user.id);
+        revalidateFeed();
+        return { ok: !error };
+    }
 
     // upsert = insert a new vote row, or change this user's existing vote on this caption.
     const { error } = await supabase
@@ -146,8 +168,16 @@ export async function castVote(captionId: string, vote: 1 | -1) {
             { onConflict: "caption_id,profile_id" }
         );
 
-    revalidatePath("/rate");
+    revalidateFeed();
     return { ok: !error };
+}
+
+// Every page that shows memes or scores.
+function revalidateFeed() {
+    revalidatePath("/");
+    revalidatePath("/rate");
+    revalidatePath("/top");
+    revalidatePath("/profile");
 }
 
 // --- Assignment 4: managing your own photos ---
@@ -177,7 +207,7 @@ export async function publishImage(imageId: string) {
     if (!data) return { ok: false };
 
     revalidatePath("/generate");
-    revalidatePath("/rate");
+    revalidateFeed();
     return { ok: true };
 }
 
@@ -196,7 +226,7 @@ export async function deleteCaption(captionId: string) {
     if (!data) return { ok: false };
 
     revalidatePath("/generate");
-    revalidatePath("/rate");
+    revalidateFeed();
     return { ok: true };
 }
 
@@ -219,6 +249,47 @@ export async function deleteImage(imageId: string) {
     await supabase.storage.from("photos").remove([deleted.storage_path]);
 
     revalidatePath("/generate");
-    revalidatePath("/rate");
+    revalidateFeed();
+    return { ok: true };
+}
+
+// "New captions": asks the AI again for a draft photo and replaces its captions.
+// The old captions are only removed once the new ones are ready.
+export async function regenerateCaptions(imageId: string): Promise<{ ok: boolean; error?: string }> {
+    const { supabase, user } = await signedIn();
+    if (!user) return { ok: false, error: "Sign in first." };
+    if (typeof imageId !== "string" || !UUID.test(imageId)) return { ok: false };
+
+    // RLS: only the owner's own row comes back. Posted photos keep their captions (and votes).
+    const { data: image } = await supabase
+        .from("images")
+        .select("id, storage_path, published")
+        .eq("id", imageId)
+        .eq("profile_id", user.id)
+        .maybeSingle<{ id: string; storage_path: string; published: boolean }>();
+    if (!image) return { ok: false, error: "Couldn't find that photo." };
+    if (image.published) return { ok: false, error: "Posted memes keep their captions." };
+
+    const photo = await readPhoto(supabase, image.storage_path);
+    if (!photo.ok) return { ok: false, error: "Couldn't read that photo." };
+
+    let captions: string[];
+    let model: string;
+    try {
+        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType));
+    } catch (error) {
+        console.error("regenerateCaptions:", error);
+        return { ok: false, error: "The AI is busy right now. Your old captions are still here." };
+    }
+
+    const { error: deleteError } = await supabase.from("captions").delete().eq("image_id", image.id);
+    if (deleteError) return { ok: false, error: "Couldn't replace the captions." };
+
+    const { error: insertError } = await supabase
+        .from("captions")
+        .insert(captions.map((content) => ({ image_id: image.id, content, prompt: PROMPT, model })));
+    if (insertError) return { ok: false, error: "Couldn't save the new captions." };
+
+    revalidatePath("/generate");
     return { ok: true };
 }

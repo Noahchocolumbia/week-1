@@ -12,6 +12,28 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
 
     const { saved, error } = await searchParams;
 
+    // Your numbers: memes you've posted, votes you've cast, and the score your captions earned.
+    const [posted, myVotes, myCaptions, scores] = await Promise.all([
+        supabase
+            .from("images")
+            .select("id", { count: "exact", head: true })
+            .eq("profile_id", user.id)
+            .eq("published", true),
+        supabase.from("caption_votes").select("id", { count: "exact", head: true }),
+        supabase.from("captions").select("id").eq("profile_id", user.id),
+        supabase.rpc("caption_scores"),
+    ]);
+    const mine = new Set((myCaptions.data ?? []).map((c: { id: string }) => c.id));
+    const earned = ((scores.data ?? []) as { caption_id: string; score: number }[])
+        .filter((s) => mine.has(s.caption_id))
+        .reduce((total, s) => total + Number(s.score), 0);
+
+    const stats = [
+        { label: "Memes posted", value: posted.count ?? 0 },
+        { label: "Votes cast", value: myVotes.count ?? 0 },
+        { label: "Score earned", value: earned > 0 ? `+${earned}` : earned },
+    ];
+
     const avatarUrl = profile?.avatar_path
         ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
         : null;
@@ -19,10 +41,16 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
     return (
         <>
             <NavBar />
-            <main style={{ maxWidth: "560px", margin: "0 auto", padding: "3rem 2rem", position: "relative", zIndex: 2 }}>
-                <h1 className="pixel-heading" style={{ fontSize: "1.5rem", marginBottom: "2rem" }}>
-                    Profile
-                </h1>
+            <main className="content-page">
+                <h1 className="pixel-heading page-title">Profile</h1>
+                <ul className="stat-row" aria-label="Your stats">
+                    {stats.map((stat) => (
+                        <li key={stat.label} className="stat-box">
+                            <strong>{stat.value}</strong>
+                            <span>{stat.label}</span>
+                        </li>
+                    ))}
+                </ul>
                 <div className="retro-card">
                     <AvatarUploader userId={user.id} avatarUrl={avatarUrl} />
                     <form action={updateProfile}>

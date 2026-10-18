@@ -78,7 +78,7 @@ export default function PhotoUploader({ userId }: { userId: string }) {
                     ? "Uploading..."
                     : status === "thinking"
                       ? "Writing captions..."
-                      : "Add new photo"}
+                      : "Choose a photo"}
                 <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -89,10 +89,15 @@ export default function PhotoUploader({ userId }: { userId: string }) {
             </label>
 
             <div aria-live="polite">
+                {status === "idle" && <p className="photo-note">JPEG, PNG or WebP, up to 5 MB.</p>}
+                {status === "uploading" && <p className="photo-note">Uploading your photo...</p>}
+                {status === "thinking" && (
+                    <p className="photo-note">The AI is writing captions. This usually takes 10 to 20 seconds.</p>
+                )}
                 {status === "error" && <p className="form-error">{message}</p>}
                 {status === "done" && (
                     <p className="form-success">
-                        Captions are ready in the draft below. Delete any you don&apos;t want, then save.
+                        Captions are ready below. Delete any you don&apos;t want, then post to the feed.
                     </p>
                 )}
             </div>
