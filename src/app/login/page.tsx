@@ -1,7 +1,10 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import NavBar from "@/components/NavBar";
 import { getUserAndProfile } from "@/lib/supabase-server";
+
+export const metadata = { title: "Sign in · Laugh or Laugh" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     const { user } = await getUserAndProfile();
@@ -10,28 +13,39 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     const { error } = await searchParams;
 
     return (
-        <main className="page-center">
-            <div className="retro-card" style={{ maxWidth: "480px", textAlign: "center" }}>
-                <span className="retro-badge">[PLAYER 1]</span>
-                <h1 className="pixel-heading" style={{ fontSize: "1.25rem", margin: "1.5rem 0 1rem" }}>
-                    Sign in
-                </h1>
-                <p style={{ color: "var(--text-dim)", marginBottom: "2rem", lineHeight: 1.6 }}>
-                    Sign in to vote on memes and turn your own photos into AI-captioned ones. Any Google
-                    account works, including LionMail.
-                </p>
-                <GoogleSignInButton />
-                {error && (
-                    <p className="form-error" style={{ marginTop: "1.5rem" }}>
-                        Sign-in didn&apos;t complete. Try again.
-                    </p>
-                )}
-                <p style={{ marginTop: "2rem" }}>
-                    <Link href="/top" className="link-button">
-                        Just looking? See the top memes &gt;
-                    </Link>
-                </p>
-            </div>
-        </main>
+        <>
+            <NavBar signedIn={false} />
+            <main className="checkpoint">
+                <div className="checkpoint-card">
+                    <div className="studio-bar mono">
+                        <span className="lights" aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                        </span>
+                        <span>Security checkpoint</span>
+                    </div>
+                    <div className="checkpoint-body">
+                        <h1 className="display wide">Identify yourself.</h1>
+                        <p>
+                            Sign in to judge memes and make your own. Any Google account works, including LionMail. We
+                            only use it to know whose bad jokes are whose.
+                        </p>
+                        <GoogleSignInButton />
+                        {error && (
+                            <p className="form-error" role="alert">
+                                Error: sign-in didn&apos;t complete. Try again.
+                            </p>
+                        )}
+                        <p className="mono" style={{ marginTop: 24, marginBottom: 0 }}>
+                            Just browsing?{" "}
+                            <Link href="/top" className="link">
+                                Tour the Hall of Shame
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </main>
+        </>
     );
 }

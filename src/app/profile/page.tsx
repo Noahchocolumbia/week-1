@@ -3,7 +3,9 @@ import { updateProfile } from "@/app/actions";
 import AvatarUploader from "@/components/AvatarUploader";
 import NameFields from "@/components/NameFields";
 import NavBar from "@/components/NavBar";
-import { getUserAndProfile, hasName } from "@/lib/supabase-server";
+import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
+
+export const metadata = { title: "Personnel file · Laugh or Laugh" };
 
 export default async function ProfilePage({ searchParams }: PageProps<"/profile">) {
     const { supabase, user, profile } = await getUserAndProfile();
@@ -30,41 +32,56 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
 
     const stats = [
         { label: "Memes posted", value: posted.count ?? 0 },
-        { label: "Votes cast", value: myVotes.count ?? 0 },
+        { label: "Verdicts cast", value: myVotes.count ?? 0 },
         { label: "Score earned", value: earned > 0 ? `+${earned}` : earned },
     ];
 
-    const avatarUrl = profile?.avatar_path
-        ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
-        : null;
+    const nav = navProps(supabase, profile);
+    const name = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
 
     return (
         <>
-            <NavBar />
-            <main className="content-page">
-                <h1 className="pixel-heading page-title">Profile</h1>
-                <ul className="stat-row" aria-label="Your stats">
-                    {stats.map((stat) => (
-                        <li key={stat.label} className="stat-box">
-                            <strong>{stat.value}</strong>
-                            <span>{stat.label}</span>
-                        </li>
-                    ))}
-                </ul>
-                <div className="retro-card">
-                    <AvatarUploader userId={user.id} avatarUrl={avatarUrl} />
-                    <form action={updateProfile}>
-                        <NameFields firstName={profile?.first_name} lastName={profile?.last_name} />
-                        <label className="retro-label" htmlFor="email">
-                            Email
-                        </label>
-                        <input className="retro-input" id="email" value={user.email ?? ""} readOnly disabled />
-                        {saved && <p className="form-success">Saved.</p>}
-                        {error && <p className="form-error">Enter both a first and last name.</p>}
-                        <button type="submit" className="retro-button" style={{ marginTop: "1.5rem" }}>
-                            Save <span className="arrow">&gt;</span>
-                        </button>
-                    </form>
+            <NavBar {...nav} />
+            <main className="shell" style={{ paddingBottom: 96 }}>
+                <div className="page-top">
+                    <p className="mono" style={{ color: "var(--paper-faint)" }}>
+                        Personnel file / clearance level: meme
+                    </p>
+                </div>
+                <div className="dossier">
+                    <div className="dossier-photo">
+                        <AvatarUploader userId={user.id} avatarUrl={nav.avatarUrl} initial={nav.initial} />
+                    </div>
+                    <div className="dossier-info">
+                        <h1 className="display wide dossier-name">{name}</h1>
+                        <p className="mono" style={{ color: "var(--paper-faint)", marginTop: 10 }}>
+                            {user.email}
+                        </p>
+                        <div className="dossier-stats">
+                            {stats.map((stat) => (
+                                <div key={stat.label}>
+                                    <strong>{stat.value}</strong>
+                                    <span className="mono">{stat.label}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <form action={updateProfile} className="dossier-form">
+                            <p className="mono" style={{ color: "var(--paper-faint)", marginTop: 16 }}>
+                                Amend your records
+                            </p>
+                            <NameFields firstName={profile?.first_name} lastName={profile?.last_name} />
+                            {saved && <p className="form-success">Records updated. The Department thanks you.</p>}
+                            {error && (
+                                <p className="form-error" role="alert">
+                                    Error: enter both a first and last name.
+                                </p>
+                            )}
+                            <button type="submit" className="btn btn-primary" style={{ marginTop: 20 }}>
+                                Save changes
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </main>
         </>

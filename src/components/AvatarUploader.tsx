@@ -7,12 +7,15 @@ import { createClient } from "@/lib/supabase";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// The "mugshot" on the profile page, with a button to replace it.
 export default function AvatarUploader({
     userId,
     avatarUrl,
+    initial,
 }: {
     userId: string;
     avatarUrl: string | null;
+    initial: string;
 }) {
     const router = useRouter();
     const [status, setStatus] = useState<"idle" | "uploading" | "error">("idle");
@@ -25,12 +28,12 @@ export default function AvatarUploader({
 
         if (!file.type.startsWith("image/")) {
             setStatus("error");
-            setMessage("Choose an image file.");
+            setMessage("Error: choose an image file.");
             return;
         }
         if (file.size > MAX_BYTES) {
             setStatus("error");
-            setMessage("Photo must be under 5 MB.");
+            setMessage("Error: photo must be under 5 MB.");
             return;
         }
 
@@ -42,16 +45,14 @@ export default function AvatarUploader({
         const path = `${userId}/avatar-${Date.now()}.${ext}`;
 
         const supabase = createClient();
-        const { error } = await supabase.storage
-            .from("avatars")
-            .upload(path, file, { contentType: file.type });
+        const { error } = await supabase.storage.from("avatars").upload(path, file, { contentType: file.type });
 
         // The database only stores the path to the file.
         const saved = error ? { ok: false } : await saveAvatarPath(path);
 
         if (!saved.ok) {
             setStatus("error");
-            setMessage("Upload failed. Try again.");
+            setMessage("Error: upload failed. Try again.");
             return;
         }
 
@@ -60,18 +61,18 @@ export default function AvatarUploader({
     }
 
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", marginBottom: "2rem" }}>
+        <>
             {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="Your profile photo" className="avatar" />
+                <img src={avatarUrl} alt="Your profile photo" className="mugshot" />
             ) : (
-                <div className="avatar avatar-empty" aria-hidden="true">
-                    ?
+                <div className="mugshot" aria-hidden="true">
+                    {initial}
                 </div>
             )}
             <div>
-                <label className="retro-button" style={{ fontSize: "0.6rem", padding: "10px 16px" }}>
-                    {status === "uploading" ? "Uploading..." : avatarUrl ? "Change photo" : "Upload photo"}
+                <label className="btn btn-small" style={{ width: "100%" }}>
+                    {status === "uploading" ? "Uploading..." : avatarUrl ? "New mugshot" : "Add a mugshot"}
                     <input
                         type="file"
                         accept="image/png,image/jpeg,image/webp,image/gif"
@@ -82,6 +83,6 @@ export default function AvatarUploader({
                 </label>
                 {status === "error" && <p className="form-error">{message}</p>}
             </div>
-        </div>
+        </>
     );
 }

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import NavBar from "@/components/NavBar";
-import { getUserAndProfile, hasName } from "@/lib/supabase-server";
+import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
 
-// Gated route: only signed-in users with a finished profile get here.
+// Gated route from Assignment 3: only signed-in users with a finished profile get here.
 export default async function ProjectsPage() {
     const { supabase, user, profile } = await getUserAndProfile();
     if (!user) redirect("/login");
@@ -12,24 +12,26 @@ export default async function ProjectsPage() {
 
     return (
         <>
-            <NavBar />
-            <main className="content-page">
-                <h1 className="pixel-heading" style={{ fontSize: "1.5rem", marginBottom: "2rem" }}>
-                    Projects
-                </h1>
+            <NavBar {...navProps(supabase, profile)} />
+            <main className="shell" style={{ paddingBottom: 96 }}>
+                <div className="page-top">
+                    <p className="mono" style={{ color: "var(--paper-faint)" }}>
+                        Classified archive
+                    </p>
+                    <h1 className="display wide page-title">Projects</h1>
+                </div>
                 {error ? (
-                    <p style={{ color: "var(--text)" }}>Something went wrong loading projects.</p>
+                    <p className="form-error">Error: projects didn&apos;t load.</p>
                 ) : !data || data.length === 0 ? (
-                    <p style={{ color: "var(--text)" }}>No projects yet.</p>
+                    <p className="page-lede">No projects yet.</p>
                 ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    <div>
                         {data.map((project) => (
-                            <div key={project.id} className="retro-card" style={{ padding: "1.5rem" }}>
-                                <span className="retro-badge">[ACTIVE]</span>
-                                <h2 style={{ fontSize: "1.1rem", margin: "0.75rem 0 0.5rem", color: "var(--text)" }}>
+                            <div key={project.id} className="project-row">
+                                <h2 className="display" style={{ fontSize: "1.6rem" }}>
                                     {project.name}
                                 </h2>
-                                <p style={{ color: "var(--text-dim)", margin: 0 }}>{project.description}</p>
+                                <p>{project.description}</p>
                             </div>
                         ))}
                     </div>

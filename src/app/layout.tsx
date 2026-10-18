@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Press_Start_2P } from "next/font/google";
+import { Anton, Archivo, Geist, Geist_Mono } from "next/font/google";
+import Providers from "@/components/Providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -7,30 +8,40 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-// The arcade font used for headings, buttons and labels (see --font-pixel in globals.css).
-const pixel = Press_Start_2P({
-  weight: "400",
-  subsets: ["latin"],
-  variable: "--font-pixel",
-});
-
+// System labels and humorous status messages.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
+// Headlines. The width axis lets the same family go ultra-wide or condensed.
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+  axes: ["wdth"],
+});
+
+// The heavy, condensed typeface classic memes use. Only for the memes.
+const meme = Anton({
+  variable: "--font-meme",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   title: "Laugh or Laugh",
-  description: "AI writes the captions. You decide which ones actually land.",
+  description: "State-of-the-art artificial intelligence dedicated to the advancement of absolute nonsense.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${pixel.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable} ${meme.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

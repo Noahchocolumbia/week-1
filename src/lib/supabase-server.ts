@@ -57,3 +57,13 @@ export async function getUserAndProfile() {
 export function hasName(profile: Profile | null) {
     return Boolean(profile?.first_name?.trim() && profile?.last_name?.trim());
 }
+
+// What the top bar needs: the profile photo URL and a letter to show when there isn't one.
+export function navProps(supabase: Awaited<ReturnType<typeof createClient>>, profile: Profile | null) {
+    return {
+        avatarUrl: profile?.avatar_path
+            ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
+            : null,
+        initial: profile?.first_name?.trim().charAt(0).toUpperCase() || "?",
+    };
+}

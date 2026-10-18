@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { castVote } from "@/app/actions";
+import { splitVotes } from "@/lib/format";
 
 type Vote = 1 | -1 | 0;
 
+const LAUGH_LINES = ["Laugh logged.", "Verdict: funny.", "A chuckle has been recorded.", "The algorithm is proud of itself."];
+const MEH_LINES = ["Meh filed.", "Verdict: not it.", "The AI has been notified. It's fine.", "Comedic value: denied."];
+
+// The reaction bar under every meme: Laugh is an upvote, Meh is a downvote.
 export default function VoteButtons({
     captionId,
     initialScore,
@@ -27,11 +32,14 @@ export default function VoteButtons({
     const [vote, setVote] = useState<Vote>(initialVote);
     const [saving, setSaving] = useState(false);
     const [failed, setFailed] = useState(false);
+    const [line, setLine] = useState("");
+
+    const { laughs, mehs } = splitVotes(score, votes);
 
     async function onVote(pressed: 1 | -1) {
         if (saving) return;
 
-        // Pressing the thumb you already chose takes the vote back.
+        // Pressing the reaction you already chose takes it back.
         const next: Vote = pressed === vote ? 0 : pressed;
 
         // Update the screen right away, then confirm with the server.
@@ -41,6 +49,8 @@ export default function VoteButtons({
         setVote(next);
         setSaving(true);
         setFailed(false);
+        const pool = next === 1 ? LAUGH_LINES : MEH_LINES;
+        setLine(next === 0 ? "Verdict withdrawn." : pool[Math.floor(Math.random() * pool.length)]);
 
         const result = await castVote(captionId, next);
 
@@ -56,59 +66,61 @@ export default function VoteButtons({
         setSaving(false);
     }
 
-    const tally = (
-        <span className="vote-tally" title="Upvotes minus downvotes">
-            <span className="vote-score">{score > 0 ? `+${score}` : score}</span>
-            <span className="vote-count">
-                {votes} {votes === 1 ? "vote" : "votes"}
-            </span>
-        </span>
+    const scoreBox = (
+        <div className="score-box" title="Laughs minus mehs">
+            <strong>{score > 0 ? `+${score}` : score}</strong>
+            <span className="mono">Score</span>
+        </div>
     );
 
-    // Logged-out visitors see the totals, and the thumbs send them to sign in.
+    // Logged-out visitors see the counts; the reactions send them to sign in.
     if (!signedIn) {
         return (
-            <div className="vote-box">
-                <Link href="/login" className="vote-button" aria-label="Sign in to upvote">
-                    <span aria-hidden="true">👍</span>
-                    <span className="vote-label">Upvote</span>
+            <div className="reactions">
+                <Link href="/login" className="reaction reaction-laugh" title="Sign in to laugh">
+                    <span className="face" aria-hidden="true">😂</span>
+                    Laugh <b>{laughs}</b>
                 </Link>
-                {tally}
-                <Link href="/login" className="vote-button vote-down" aria-label="Sign in to downvote">
-                    <span aria-hidden="true">👎</span>
-                    <span className="vote-label">Downvote</span>
+                <Link href="/login" className="reaction reaction-meh" title="Sign in to meh">
+                    <span className="face" aria-hidden="true">😐</span>
+                    Meh <b>{mehs}</b>
                 </Link>
+                {scoreBox}
             </div>
         );
     }
 
     return (
-        <div className="vote-wrap">
-            <div className="vote-box">
+        <div>
+            <div className="reactions">
                 <button
                     type="button"
-                    className="vote-button"
-                    aria-label={vote === 1 ? "Upvoted. Press again to take it back" : "Upvote"}
+                    className="reaction reaction-laugh"
                     aria-pressed={vote === 1}
                     onClick={() => onVote(1)}
+                    title={vote === 1 ? "Take the laugh back" : "It got you"}
                 >
-                    <span aria-hidden="true">👍</span>
-                    <span className="vote-label">Upvote</span>
+                    <span className="face" aria-hidden="true">😂</span>
+                    Laugh <b>{laughs}</b>
                 </button>
-                {tally}
                 <button
                     type="button"
-                    className="vote-button vote-down"
-                    aria-label={vote === -1 ? "Downvoted. Press again to take it back" : "Downvote"}
+                    className="reaction reaction-meh"
                     aria-pressed={vote === -1}
                     onClick={() => onVote(-1)}
+                    title={vote === -1 ? "Take the meh back" : "It didn't"}
                 >
-                    <span aria-hidden="true">👎</span>
-                    <span className="vote-label">Downvote</span>
+                    <span className="face" aria-hidden="true">😐</span>
+                    Meh <b>{mehs}</b>
                 </button>
+                {scoreBox}
             </div>
-            <p className="vote-status" role={failed ? "alert" : undefined}>
-                {failed ? "Vote didn't save. Try again." : vote !== 0 ? "Tap again to undo" : " "}
+            <p className="reaction-status mono" role={failed ? "alert" : undefined}>
+                {failed
+                    ? "Error: verdict not saved. Try again."
+                    : vote !== 0
+                      ? `${line || "Verdict recorded."} Tap again to undo.`
+                      : " "}
             </p>
         </div>
     );

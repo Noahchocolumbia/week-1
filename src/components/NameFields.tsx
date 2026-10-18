@@ -7,11 +7,11 @@ export default function NameFields({
 }) {
     return (
         <>
-            <label className="retro-label" htmlFor="first_name">
+            <label className="field-label mono" htmlFor="first_name">
                 First name
             </label>
             <input
-                className="retro-input"
+                className="field"
                 id="first_name"
                 name="first_name"
                 defaultValue={firstName ?? ""}
@@ -19,11 +19,11 @@ export default function NameFields({
                 maxLength={80}
                 required
             />
-            <label className="retro-label" htmlFor="last_name">
+            <label className="field-label mono" htmlFor="last_name">
                 Last name
             </label>
             <input
-                className="retro-input"
+                className="field"
                 id="last_name"
                 name="last_name"
                 defaultValue={lastName ?? ""}

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { captionImage, PROMPT } from "@/lib/gemini";
+import { buildPrompt, captionImage } from "@/lib/gemini";
+import { isFormat, styleById, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
 
 // Shared by the welcome form and the profile form.
@@ -82,7 +83,9 @@ export type GenerateResult = { ok: true; imageId: string } | { ok: false; error:
 // The browser has already uploaded the photo to the "photos" bucket.
 // This asks Gemini for captions, then saves the photo and its captions as rows.
 // The photo starts as a draft (published = false): only its owner can see it until they save it.
-export async function generateCaptions(path: string): Promise<GenerateResult> {
+export type StudioOptions = { style?: string; idea?: string; format?: MemeFormat };
+
+export async function generateCaptions(path: string, options: StudioOptions = {}): Promise<GenerateResult> {
     const supabase = await createClient();
     const {
         data: { user },
@@ -105,10 +108,15 @@ export async function generateCaptions(path: string): Promise<GenerateResult> {
     if (!photo.ok) return photo.error === "type" ? discard("Use a JPEG, PNG or WebP photo under 5 MB.") : { ok: false, error: "Couldn't read the uploaded photo." };
     const { bytes, mimeType } = photo;
 
+    // The humor style and idea steer what Gemini writes.
+    const style = styleById(options.style).id;
+    const format: MemeFormat = isFormat(options.format) ? options.format : "top";
+    const prompt = buildPrompt(style, options.idea);
+
     let captions: string[];
     let model: string;
     try {
-        ({ captions, model } = await captionImage(bytes.toString("base64"), mimeType));
+        ({ captions, model } = await captionImage(bytes.toString("base64"), mimeType, prompt));
     } catch (error) {
         console.error("generateCaptions:", error);
         return discard("The AI is busy right now, so nothing was saved. Try again in a minute.");
@@ -117,7 +125,7 @@ export async function generateCaptions(path: string): Promise<GenerateResult> {
     // profile_id is filled in by the database (default auth.uid()), and RLS checks it.
     const { data: image, error: imageError } = await supabase
         .from("images")
-        .insert({ storage_path: path })
+        .insert({ storage_path: path, style, format })
         .select("id")
         .single<{ id: string }>();
     if (imageError || !image) return discard("Couldn't save the photo.");
@@ -125,7 +133,7 @@ export async function generateCaptions(path: string): Promise<GenerateResult> {
     // One row per caption, each recording the prompt and model that produced it.
     const { error: captionError } = await supabase
         .from("captions")
-        .insert(captions.map((content) => ({ image_id: image.id, content, prompt: PROMPT, model })));
+        .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
     if (captionError) return { ok: false, error: "Couldn't save the captions." };
 
     revalidatePath("/generate");
@@ -255,7 +263,11 @@ export async function deleteImage(imageId: string) {
 
 // "New captions": asks the AI again for a draft photo and replaces its captions.
 // The old captions are only removed once the new ones are ready.
-export async function regenerateCaptions(imageId: string): Promise<{ ok: boolean; error?: string }> {
+// "Regenerate" keeps the photo's style; "Remix" passes a different one.
+export async function regenerateCaptions(
+    imageId: string,
+    options: { style?: string; idea?: string } = {}
+): Promise<{ ok: boolean; error?: string }> {
     const { supabase, user } = await signedIn();
     if (!user) return { ok: false, error: "Sign in first." };
     if (typeof imageId !== "string" || !UUID.test(imageId)) return { ok: false };
@@ -263,20 +275,23 @@ export async function regenerateCaptions(imageId: string): Promise<{ ok: boolean
     // RLS: only the owner's own row comes back. Posted photos keep their captions (and votes).
     const { data: image } = await supabase
         .from("images")
-        .select("id, storage_path, published")
+        .select("id, storage_path, published, style")
         .eq("id", imageId)
         .eq("profile_id", user.id)
-        .maybeSingle<{ id: string; storage_path: string; published: boolean }>();
+        .maybeSingle<{ id: string; storage_path: string; published: boolean; style: string }>();
     if (!image) return { ok: false, error: "Couldn't find that photo." };
     if (image.published) return { ok: false, error: "Posted memes keep their captions." };
 
     const photo = await readPhoto(supabase, image.storage_path);
     if (!photo.ok) return { ok: false, error: "Couldn't read that photo." };
 
+    const style = styleById(options.style ?? image.style).id;
+    const prompt = buildPrompt(style, options.idea);
+
     let captions: string[];
     let model: string;
     try {
-        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType));
+        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType, prompt));
     } catch (error) {
         console.error("regenerateCaptions:", error);
         return { ok: false, error: "The AI is busy right now. Your old captions are still here." };
@@ -287,9 +302,55 @@ export async function regenerateCaptions(imageId: string): Promise<{ ok: boolean
 
     const { error: insertError } = await supabase
         .from("captions")
-        .insert(captions.map((content) => ({ image_id: image.id, content, prompt: PROMPT, model })));
+        .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
     if (insertError) return { ok: false, error: "Couldn't save the new captions." };
 
+    // Remember the style, so the label on the meme matches what wrote it.
+    if (style !== image.style) await supabase.from("images").update({ style }).eq("id", image.id);
+
     revalidatePath("/generate");
+    return { ok: true };
+}
+
+// Saves a person's rewrite of an AI caption on one of their drafts.
+// RLS only allows this on the owner's own unpublished photos.
+export async function updateCaption(captionId: string, content: string): Promise<{ ok: boolean; error?: string }> {
+    const { supabase, user } = await signedIn();
+    if (!user) return { ok: false, error: "Sign in first." };
+    if (typeof captionId !== "string" || !UUID.test(captionId)) return { ok: false };
+
+    const text = String(content ?? "").replace(/\s+/g, " ").trim();
+    if (!text) return { ok: false, error: "A caption needs at least one word." };
+    if (text.length > 140) return { ok: false, error: "Keep it under 140 characters." };
+
+    const { data } = await supabase
+        .from("captions")
+        .update({ content: text, edited: true })
+        .eq("id", captionId)
+        .select("id")
+        .maybeSingle<{ id: string }>();
+    if (!data) return { ok: false, error: "Only drafts can be edited." };
+
+    revalidatePath("/generate");
+    return { ok: true };
+}
+
+// Changes the layout of one of your memes (caption above, on, or under the photo).
+export async function setFormat(imageId: string, format: MemeFormat): Promise<{ ok: boolean }> {
+    const { supabase, user } = await signedIn();
+    if (!user) return { ok: false };
+    if (typeof imageId !== "string" || !UUID.test(imageId) || !isFormat(format)) return { ok: false };
+
+    const { data } = await supabase
+        .from("images")
+        .update({ format })
+        .eq("id", imageId)
+        .eq("profile_id", user.id)
+        .select("id")
+        .maybeSingle<{ id: string }>();
+    if (!data) return { ok: false };
+
+    revalidatePath("/generate");
+    revalidateFeed();
     return { ok: true };
 }
