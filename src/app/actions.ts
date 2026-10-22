@@ -231,6 +231,7 @@ export async function deleteCaption(captionId: string) {
         .from("captions")
         .delete()
         .eq("id", captionId)
+        .eq("profile_id", user.id)
         .select("id")
         .maybeSingle<{ id: string }>();
     if (!data) return { ok: false };
@@ -325,10 +326,13 @@ export async function updateCaption(captionId: string, content: string): Promise
     if (!text) return { ok: false, error: "A caption needs at least one word." };
     if (text.length > 140) return { ok: false, error: "Keep it under 140 characters." };
 
+    // Defense in depth: scope to this user's own caption, don't rely on RLS alone
+    // (matches castVote/publishImage/setFormat). RLS still enforces draft-only.
     const { data } = await supabase
         .from("captions")
         .update({ content: text, edited: true })
         .eq("id", captionId)
+        .eq("profile_id", user.id)
         .select("id")
         .maybeSingle<{ id: string }>();
     if (!data) return { ok: false, error: "Only drafts can be edited." };

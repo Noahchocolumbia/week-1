@@ -14,7 +14,8 @@ export function splitVotes(score: number, votes: number) {
 }
 
 // "gemini-3.8-flash" -> "Gemini 3.8 Flash"
-export function modelName(model: string) {
+export function modelName(model: string | null | undefined) {
+    if (!model) return "an unknown model";
     return model
         .split("-")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

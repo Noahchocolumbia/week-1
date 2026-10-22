@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import PostCard from "@/components/PostCard";
 import SiteFooter from "@/components/SiteFooter";
-import { loadMeme } from "@/lib/feed";
+import { loadMeme, loadMemePreview } from "@/lib/feed";
 import { modelName } from "@/lib/format";
 import { assess, styleById } from "@/lib/styles";
 import { createClient, getUserAndProfile, navProps } from "@/lib/supabase-server";
@@ -16,12 +16,12 @@ export async function generateMetadata({ params }: PageProps<"/m/[id]">): Promis
     const { id } = await params;
     if (!UUID.test(id)) return { title: "Laugh or Laugh" };
     const supabase = await createClient();
-    const meme = await loadMeme(supabase, id, null);
-    if (!meme) return { title: "Laugh or Laugh" };
+    const preview = await loadMemePreview(supabase, id);
+    if (!preview) return { title: "Laugh or Laugh" };
     return {
-        title: `"${meme.content}" · Laugh or Laugh`,
+        title: `"${preview.content}" · Laugh or Laugh`,
         description: "A machine wrote this caption. Laugh or meh.",
-        openGraph: { title: meme.content, images: [{ url: meme.url }] },
+        openGraph: { title: preview.content, images: [{ url: preview.url }] },
     };
 }
 

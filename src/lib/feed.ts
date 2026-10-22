@@ -139,6 +139,30 @@ export async function loadMeme(supabase: Supabase, captionId: string, userId: st
     return toMeme(supabase, image, row, scoreOf, voteOf);
 }
 
+// Just the caption text and photo URL for a published meme — enough for link
+// previews (OG tags). Skips the site-wide score aggregate that loadMeme needs.
+export async function loadMemePreview(supabase: Supabase, captionId: string) {
+    const { data: caption } = await supabase
+        .from("captions")
+        .select("content, image_id")
+        .eq("id", captionId)
+        .maybeSingle<{ content: string; image_id: string }>();
+    if (!caption) return null;
+
+    const { data: image } = await supabase
+        .from("images")
+        .select("storage_path")
+        .eq("id", caption.image_id)
+        .eq("published", true)
+        .maybeSingle<{ storage_path: string }>();
+    if (!image) return null;
+
+    return {
+        content: caption.content,
+        url: supabase.storage.from("photos").getPublicUrl(image.storage_path).data.publicUrl,
+    };
+}
+
 // Highest score first; more votes breaks a tie.
 export function topMemes(memes: Meme[], count: number) {
     return [...memes].sort((a, b) => b.score - a.score || b.votes - a.votes).slice(0, count);
