@@ -3,6 +3,7 @@ import { updateProfile } from "@/app/actions";
 import AvatarUploader from "@/components/AvatarUploader";
 import NameFields from "@/components/NameFields";
 import NavBar from "@/components/NavBar";
+import { loadScores } from "@/lib/feed";
 import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
 
 export const metadata = { title: "Personnel file · Laugh or Laugh" };
@@ -15,7 +16,7 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
     const { saved, error } = await searchParams;
 
     // Your numbers: memes you've posted, votes you've cast, and the score your captions earned.
-    const [posted, myVotes, myCaptions, scores] = await Promise.all([
+    const [posted, myVotes, myCaptions, scoreOf] = await Promise.all([
         supabase
             .from("images")
             .select("id", { count: "exact", head: true })
@@ -23,12 +24,10 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
             .eq("published", true),
         supabase.from("caption_votes").select("id", { count: "exact", head: true }),
         supabase.from("captions").select("id").eq("profile_id", user.id),
-        supabase.rpc("caption_scores"),
+        loadScores(supabase),
     ]);
-    const mine = new Set((myCaptions.data ?? []).map((c: { id: string }) => c.id));
-    const earned = ((scores.data ?? []) as { caption_id: string; score: number }[])
-        .filter((s) => mine.has(s.caption_id))
-        .reduce((total, s) => total + Number(s.score), 0);
+    const mine = (myCaptions.data ?? []).map((c: { id: string }) => c.id);
+    const earned = mine.reduce((total, id) => total + (scoreOf.get(id)?.score ?? 0), 0);
 
     const stats = [
         { label: "Memes posted", value: posted.count ?? 0 },

@@ -19,6 +19,7 @@ import { useApp } from "@/components/Providers";
 import ShareControls from "@/components/ShareControls";
 import { createClient } from "@/lib/supabase";
 import { HUMOR_STYLES, MEME_FORMATS, assess, promptQuip, styleById, type MemeFormat } from "@/lib/styles";
+import { MAX_PHOTO_BYTES, PHOTO_TYPES } from "@/lib/uploads";
 
 export type StudioCaption = { id: string; content: string; edited: boolean; score: number; votes: number };
 export type StudioImage = {
@@ -30,8 +31,6 @@ export type StudioImage = {
     captions: StudioCaption[];
 };
 
-const MAX_BYTES = 5 * 1024 * 1024;
-const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 export default function Studio({
@@ -73,15 +72,15 @@ export default function Studio({
     function pickFile(next: File | undefined | null) {
         setError("");
         if (!next) return;
-        if (!TYPES[next.type]) return setError("Error: that's not a photo we can read. Use JPEG, PNG or WebP.");
-        if (next.size > MAX_BYTES) return setError("Error: photo exceeds 5 MB. Even memes have limits.");
+        if (!PHOTO_TYPES[next.type]) return setError("Error: that's not a photo we can read. Use JPEG, PNG or WebP.");
+        if (next.size > MAX_PHOTO_BYTES) return setError("Error: photo exceeds 5 MB. Even memes have limits.");
         setFile(next);
         setPreview(URL.createObjectURL(next));
     }
 
     async function onGenerate() {
         if (!file) return setError("Error: no evidence submitted. Add a photo first.");
-        const ext = TYPES[file.type];
+        const ext = PHOTO_TYPES[file.type];
         setError("");
         setCooking({ styleId });
 
@@ -275,7 +274,7 @@ export default function Studio({
                     {cooking ? (
                         <Cooking styleName={styleById(cooking.styleId).name} color={styleById(cooking.styleId).color} />
                     ) : active ? (
-                        <Workspace key={active.id} draft={active} idea={idea} onGone={() => setActiveId(null)} />
+                        <Workspace key={active.id} draft={active} onGone={() => setActiveId(null)} />
                     ) : (
                         <div className="workspace-idle">
                             <div>
@@ -346,7 +345,7 @@ export default function Studio({
 }
 
 // The editing workspace for one draft: pick a variation, edit, remix, export, post.
-function Workspace({ draft, idea, onGone }: { draft: StudioImage; idea: string; onGone: () => void }) {
+function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }) {
     const { toast } = useApp();
     const [pending, startTransition] = useTransition();
     const [pick, setPick] = useState(0);
@@ -375,7 +374,9 @@ function Workspace({ draft, idea, onGone }: { draft: StudioImage; idea: string; 
     async function regenerate(mode: "regen" | "remix") {
         setBusy(mode);
         setError("");
-        const result = await regenerateCaptions(draft.id, mode === "remix" ? { style: remixStyle, idea } : { idea });
+        // No idea passed: the control-panel idea box belongs to the new-upload flow,
+        // not to an existing draft. Regenerate keeps the style; Remix switches it.
+        const result = await regenerateCaptions(draft.id, mode === "remix" ? { style: remixStyle } : {});
         setBusy(null);
         if (!result.ok) return setError(`Error: ${result.error ?? "the AI declined. Try again."}`);
         setPick(0);

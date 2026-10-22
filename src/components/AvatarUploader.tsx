@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { saveAvatarPath } from "@/app/actions";
 import { createClient } from "@/lib/supabase";
-
-const MAX_BYTES = 5 * 1024 * 1024;
+import { MAX_PHOTO_BYTES } from "@/lib/uploads";
 
 // The "mugshot" on the profile page, with a button to replace it.
 export default function AvatarUploader({
@@ -31,7 +30,7 @@ export default function AvatarUploader({
             setMessage("Error: choose an image file.");
             return;
         }
-        if (file.size > MAX_BYTES) {
+        if (file.size > MAX_PHOTO_BYTES) {
             setStatus("error");
             setMessage("Error: photo must be under 5 MB.");
             return;

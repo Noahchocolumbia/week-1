@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import Studio, { type StudioImage } from "@/components/Studio";
+import { loadScores } from "@/lib/feed";
 import { isFormat } from "@/lib/styles";
 import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
 
@@ -29,21 +30,15 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
     const initialIdea = typeof idea === "string" ? idea.slice(0, 200) : "";
 
     // Every photo this user has uploaded, newest first, plus everyone's totals.
-    const [{ data }, scores] = await Promise.all([
+    const [{ data, error }, scoreOf] = await Promise.all([
         supabase
             .from("images")
             .select("id, storage_path, published, style, format, captions(id, content, edited, created_at)")
             .eq("profile_id", user.id)
             .order("created_at", { ascending: false })
             .returns<PhotoRow[]>(),
-        supabase.rpc("caption_scores"),
+        loadScores(supabase),
     ]);
-    const scoreOf = new Map(
-        ((scores.data ?? []) as { caption_id: string; score: number; votes: number }[]).map((s) => [
-            s.caption_id,
-            { score: Number(s.score), votes: Number(s.votes) },
-        ])
-    );
 
     const images: StudioImage[] = (data ?? []).map((row) => ({
         id: row.id,
@@ -69,6 +64,11 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
                         A professional creative tool that has been hijacked by internet trolls. Upload a photo, pick a
                         humor style, and Gemini writes three captions you can edit, remix, export, or unleash.
                     </p>
+                    {error && (
+                        <p className="error-line" role="alert">
+                            Something went wrong loading your photos. Refresh to try again.
+                        </p>
+                    )}
                 </div>
                 <Studio
                     userId={user.id}

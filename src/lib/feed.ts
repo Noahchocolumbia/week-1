@@ -39,17 +39,23 @@ type VoteRow = { caption_id: string; vote: 1 | -1 };
 
 const IMAGE_FIELDS = "id, storage_path, created_at, style, format, captions(id, content, model, edited)";
 
+// Every caption's score and vote count, from the aggregate RPC. Shared by the
+// feed, the share page, and the studio so they all build the map the same way.
+export async function loadScores(supabase: Supabase) {
+    const scores = await supabase.rpc("caption_scores");
+    return new Map(
+        ((scores.data ?? []) as ScoreRow[]).map((s) => [s.caption_id, { score: Number(s.score), votes: Number(s.votes) }])
+    );
+}
+
 async function totalsAndVotes(supabase: Supabase, userId: string | null) {
-    const [scores, myVotes] = await Promise.all([
-        supabase.rpc("caption_scores"),
+    const [scoreOf, myVotes] = await Promise.all([
+        loadScores(supabase),
         // RLS only returns this user's own votes.
         userId
             ? supabase.from("caption_votes").select("caption_id, vote").returns<VoteRow[]>()
             : Promise.resolve({ data: [] as VoteRow[] }),
     ]);
-    const scoreOf = new Map(
-        ((scores.data ?? []) as ScoreRow[]).map((s) => [s.caption_id, { score: Number(s.score), votes: Number(s.votes) }])
-    );
     const voteOf = new Map((myVotes.data ?? []).map((v) => [v.caption_id, v.vote]));
     return { scoreOf, voteOf };
 }

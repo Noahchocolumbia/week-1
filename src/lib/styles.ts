@@ -141,7 +141,7 @@ export function promptQuip(prompt: string): string | null {
     if (/(homework|essay|exam|midterm|final|problem set|pset)/.test(p))
         return "We cannot do your homework. We can make it funnier though.";
     if (/(tax|irs|w-?2)/.test(p)) return "Your prompt has been forwarded to the Department of Nonsense, Tax Division.";
-    if (/(ex|situationship|crush)\b/.test(p)) return "Emotional damage detected. Proceeding anyway.";
+    if (/\b(ex|situationship|crush)\b/.test(p)) return "Emotional damage detected. Proceeding anyway.";
     if (/(mta|subway|train)/.test(p)) return "Delays expected. Captions running local.";
     if (p.length > 160) return "That's a lot of lore. The AI will skim it like a syllabus.";
     return null;

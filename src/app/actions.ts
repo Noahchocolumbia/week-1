@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { buildPrompt, captionImage } from "@/lib/gemini";
 import { isFormat, styleById, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
+import { MAX_PHOTO_BYTES, PHOTO_MIME_TYPES } from "@/lib/uploads";
 
 // Shared by the welcome form and the profile form.
 async function saveNames(formData: FormData) {
@@ -59,9 +60,6 @@ export async function saveAvatarPath(path: string) {
 
 // --- Assignment 4: AI captions ---
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 // Downloads a photo from the public "photos" bucket and checks its type and size.
@@ -72,7 +70,7 @@ async function readPhoto(supabase: Supabase, path: string) {
 
     const mimeType = (res.headers.get("content-type") ?? "").split(";")[0];
     const bytes = Buffer.from(await res.arrayBuffer());
-    if (!PHOTO_TYPES.includes(mimeType) || bytes.length > MAX_PHOTO_BYTES) {
+    if (!PHOTO_MIME_TYPES.includes(mimeType) || bytes.length > MAX_PHOTO_BYTES) {
         return { ok: false as const, error: "type" as const };
     }
     return { ok: true as const, bytes, mimeType };
@@ -134,7 +132,11 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     const { error: captionError } = await supabase
         .from("captions")
         .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
-    if (captionError) return { ok: false, error: "Couldn't save the captions." };
+    if (captionError) {
+        // Roll back the just-inserted draft so it (and its photo) aren't left behind.
+        await supabase.from("images").delete().eq("id", image.id);
+        return discard("Couldn't save the captions.");
+    }
 
     revalidatePath("/generate");
     return { ok: true, imageId: image.id };
