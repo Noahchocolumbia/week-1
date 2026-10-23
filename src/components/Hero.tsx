@@ -1,12 +1,11 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import Magnetic from "@/components/Magnetic";
 import MemeImage from "@/components/MemeImage";
 import type { PostMeme } from "@/components/PostCard";
-import { promptQuip } from "@/lib/styles";
 
 const lineUp = {
     hidden: { y: "105%" },
@@ -33,48 +32,17 @@ export function HeroHeadline() {
     );
 }
 
-// The prompt box: an idea typed here is carried into the studio.
-export function HeroPrompt({ signedIn }: { signedIn: boolean }) {
-    const router = useRouter();
-    const [idea, setIdea] = useState("");
-    const quip = promptQuip(idea);
-
-    function onSubmit(event: React.FormEvent) {
-        event.preventDefault();
-        if (!signedIn) {
-            router.push("/login");
-            return;
-        }
-        const params = new URLSearchParams();
-        if (idea.trim()) params.set("idea", idea.trim().slice(0, 200));
-        router.push(`/generate${params.size ? `?${params}` : ""}`);
-    }
-
+// The one call to action on the homepage: straight into the lab (or sign-in first).
+export function HeroCTA({ signedIn }: { signedIn: boolean }) {
     return (
-        <form onSubmit={onSubmit}>
-            <div className="prompt-box">
-                <label>
-                    <span className="caret" aria-hidden="true">
-                        &gt;
-                    </span>
-                    <span className="visually-hidden">Describe the meme you want</span>
-                    <input
-                        value={idea}
-                        onChange={(e) => setIdea(e.target.value)}
-                        placeholder="my roommate's sourdough starter has a LinkedIn"
-                        maxLength={200}
-                    />
-                </label>
-                <Magnetic>
-                    <button type="submit" className="btn btn-primary btn-big" title="Point of no return">
-                        Generate brainrot →
-                    </button>
-                </Magnetic>
-            </div>
-            <p className="mono quip" aria-live="polite" style={{ minHeight: "1.4em" }}>
-                {quip ?? ""}
-            </p>
-        </form>
+        <div className="hero-cta">
+            <Magnetic>
+                <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary btn-big" title="Point of no return">
+                    Generate brainrot →
+                </Link>
+            </Magnetic>
+            {!signedIn && <p className="mono quip">Sign in with Google first. It takes one click.</p>}
+        </div>
     );
 }
 

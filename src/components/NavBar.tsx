@@ -52,7 +52,7 @@ export default function NavBar({ signedIn = true, avatarUrl = null, initial = "?
     const links = signedIn
         ? [
               { href: "/rate", label: "Feed" },
-              { href: "/generate", label: "Studio" },
+              { href: "/generate", label: "The Lab" },
               { href: "/top", label: "Hall of Shame" },
           ]
         : [
@@ -130,7 +130,7 @@ export default function NavBar({ signedIn = true, avatarUrl = null, initial = "?
                         </Link>
                         <Link href="/generate" className="tab-create" aria-current={here("/generate")}>
                             <Plus size={22} aria-hidden="true" />
-                            Studio
+                            Lab
                         </Link>
                         <Link href="/top" aria-current={here("/top")}>
                             <Trophy size={20} aria-hidden="true" />

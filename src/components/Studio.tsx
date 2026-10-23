@@ -62,6 +62,8 @@ export default function Studio({
 
     const style = styleById(styleId);
     const quip = promptQuip(idea);
+    // Every caption is posted as its own meme.
+    const postedCount = posted.reduce((n, image) => n + image.captions.length, 0);
 
     useEffect(() => {
         return () => {
@@ -260,7 +262,7 @@ export default function Studio({
                                 {error}
                             </p>
                         ) : (
-                            <p className="mono">Three captions. One photo. No refunds.</p>
+                            <p className="mono">Three captions. Three memes. No refunds.</p>
                         )}
                     </div>
                 </section>
@@ -326,17 +328,17 @@ export default function Studio({
                     <h2 className="display wide" style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)" }}>
                         Your published crimes
                     </h2>
-                    <p className="section-note mono">{posted.length} on the public record</p>
+                    <p className="section-note mono">{postedCount} on the public record</p>
                 </div>
-                {posted.length === 0 ? (
+                {postedCount === 0 ? (
                     <div className="empty">
                         <p style={{ marginBottom: 0 }}>Clean record so far. Post a draft to change that.</p>
                     </div>
                 ) : (
                     <div className="gallery">
-                        {posted.map((image) => (
-                            <PostedCard key={image.id} image={image} />
-                        ))}
+                        {posted.flatMap((image) =>
+                            image.captions.map((caption) => <PostedMeme key={caption.id} image={image} caption={caption} />)
+                        )}
                     </div>
                 )}
             </section>
@@ -411,9 +413,9 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                                 onGone();
                             })
                         }
-                        title="Every remaining variation goes to the feed"
+                        title="Each caption goes to the feed as its own meme"
                     >
-                        Post to feed
+                        {captions.length === 1 ? "Post 1 meme" : `Post ${captions.length} memes`}
                     </button>
                     {current && <ShareControls captionId={current.id} url={draft.url} caption={current.content} format={draft.format} showLink={false} />}
                     {confirmDelete ? (
@@ -601,38 +603,28 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
     );
 }
 
-// A meme you've posted: its best caption, the scoreboard, share links.
-function PostedCard({ image }: { image: StudioImage }) {
+// One posted meme (one caption on its photo): score, share links, delete.
+function PostedMeme({ image, caption }: { image: StudioImage; caption: StudioCaption }) {
     const { toast } = useApp();
     const [pending, startTransition] = useTransition();
     const [confirm, setConfirm] = useState(false);
-    const best = [...image.captions].sort((a, b) => b.score - a.score)[0];
     const style = styleById(image.style);
-    if (!best) return null;
 
     return (
         <article className="post">
             <div className="exhibit-label mono">
                 <span style={{ color: style.color }}>{style.name}</span>
-                <span>Live</span>
+                <span style={{ color: caption.score > 0 ? "var(--yellow)" : undefined }}>
+                    {caption.score > 0 ? `+${caption.score}` : caption.score} · {caption.votes} {caption.votes === 1 ? "vote" : "votes"}
+                </span>
             </div>
             <div style={{ padding: "10px 14px 0" }}>
-                <MemeImage url={image.url} caption={best.content} format={image.format} size="small" />
+                <Link href={`/m/${caption.id}`} aria-label="Open this meme's page">
+                    <MemeImage url={image.url} caption={caption.content} format={image.format} size="small" />
+                </Link>
             </div>
             <div className="post-foot">
-                <ul className="mono" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
-                    {image.captions.map((c) => (
-                        <li key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                            <Link href={`/m/${c.id}`} className="link" style={{ textTransform: "none", fontFamily: "var(--font-ui)", fontSize: "0.85rem" }}>
-                                {c.content}
-                            </Link>
-                            <span style={{ whiteSpace: "nowrap", color: c.score > 0 ? "var(--yellow)" : "var(--paper-faint)" }}>
-                                {c.score > 0 ? `+${c.score}` : c.score} / {c.votes}v
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-                <ShareControls captionId={best.id} url={image.url} caption={best.content} format={image.format} />
+                <ShareControls captionId={caption.id} url={image.url} caption={caption.content} format={image.format} />
                 <div className="tool-row" style={{ marginTop: 8 }}>
                     {confirm ? (
                         <>
@@ -642,12 +634,12 @@ function PostedCard({ image }: { image: StudioImage }) {
                                 disabled={pending}
                                 onClick={() =>
                                     startTransition(async () => {
-                                        const r = await deleteImage(image.id);
+                                        const r = await deleteCaption(caption.id);
                                         toast(r.ok ? "Evidence destroyed." : "Couldn't delete it. Try again.");
                                     })
                                 }
                             >
-                                Yes, delete everywhere
+                                Yes, delete this meme
                             </button>
                             <button type="button" className="btn btn-quiet btn-small" onClick={() => setConfirm(false)}>
                                 Cancel

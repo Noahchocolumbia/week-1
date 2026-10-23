@@ -534,6 +534,14 @@ main {
   color: var(--paper-dim);
 }
 
+.hero-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 .prompt-box {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -948,14 +956,13 @@ main {
    Gallery: an exhibition of questionable internet history
    --------------------------------------------------------------- */
 
+/* Memes stack one at a time in a centered column, never side by side. */
 .gallery {
-  columns: 3 320px;
-  column-gap: 20px;
-}
-
-.gallery > * {
-  break-inside: avoid;
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 .gallery .post:hover {
@@ -2148,4 +2155,109 @@ main {
 
 .project-row p {
   color: var(--paper-dim);
+}
+
+
+/* ---------------------------------------------------------------
+   Feed: one centered column, Instagram width
+   --------------------------------------------------------------- */
+
+.feed {
+  /* Space taken by the sticky header + progress bar above, and the phone tab bar below. */
+  --feed-top: 108px;
+  --feed-bottom: 0px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* One meme per screen: every scroll snaps to the next post. */
+html:has(.feed) {
+  scroll-snap-type: y mandatory;
+  scroll-padding-top: 108px;
+}
+
+.feed .feed-column {
+  gap: 0;
+}
+
+.feed [data-post] {
+  height: calc(100svh - var(--feed-top) - var(--feed-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 12px 0;
+}
+
+/* Leave room for the post's header and reactions so the whole meme fits on screen. */
+.feed .meme img {
+  max-height: calc(100svh - var(--feed-top) - var(--feed-bottom) - 230px);
+}
+
+@media (max-width: 760px) {
+  .feed {
+    --feed-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  html:has(.feed) main {
+    padding-bottom: 0;
+  }
+}
+
+.feed-progress {
+  position: sticky;
+  top: 64px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  margin-bottom: 8px;
+  background: var(--bg);
+  color: var(--paper-faint);
+}
+
+.feed-progress .meter {
+  flex: 1;
+  height: 4px;
+  margin-top: 0;
+  border: none;
+  background: var(--line);
+}
+
+.feed .post-head {
+  justify-content: space-between;
+  border-bottom: none;
+}
+
+.feed .post-foot {
+  border-top: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.share-row-compact {
+  margin-top: 0;
+  gap: 2px;
+}
+
+.share-row-compact .icon-btn {
+  padding: 0 8px;
+  min-height: 44px;
+  min-width: 44px;
+  justify-content: center;
+}
+
+.feed .reaction-status {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.feed .reaction-status:empty {
+  display: none;
 }

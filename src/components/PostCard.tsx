@@ -48,11 +48,8 @@ export default function PostCard({
                 </div>
             ) : (
                 <header className="post-head mono">
-                    <span>{modelName(meme.model)}</span>
-                    <span>{meme.ago}</span>
-                    <span className="style-chip" style={{ color: style.color }}>
-                        {style.name}
-                    </span>
+                    <span style={{ color: style.color }}>{style.name}</span>
+                    <span title={`Caption by ${modelName(meme.model)}`}>{meme.ago}</span>
                 </header>
             )}
 
@@ -75,8 +72,16 @@ export default function PostCard({
                     signedIn={signedIn}
                     onVoted={onVoted}
                 />
-                <ShareControls captionId={meme.captionId} url={meme.url} caption={meme.content} format={meme.format} />
-                {meme.edited && <p className="mono human-tag" style={{ marginTop: 8 }}>Edited by a human. Blame them.</p>}
+                <ShareControls
+                    captionId={meme.captionId}
+                    url={meme.url}
+                    caption={meme.content}
+                    format={meme.format}
+                    compact={variant === "feed"}
+                />
+                {meme.edited && variant === "exhibit" && (
+                    <p className="mono human-tag" style={{ marginTop: 8 }}>Edited by a human. Blame them.</p>
+                )}
             </footer>
         </article>
     );

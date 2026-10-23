@@ -14,90 +14,59 @@ export type HumorStyle = {
     chaos: number;
 };
 
+// Three styles, one per point on the chaos scale: dry, online, unhinged.
 export const HUMOR_STYLES: HumorStyle[] = [
     {
-        id: "classic",
-        name: "Classic",
-        blurb: "Regulation-grade humor. Approved by nobody.",
-        instruction: "Write in a classic, broadly relatable meme voice.",
+        id: "deadpan",
+        name: "Deadpan",
+        blurb: "Delivered with a straight face. No one was harmed. Barely.",
+        instruction:
+            "Write dry, deadpan captions: understated, observational, said with a completely straight face. " +
+            "The joke is in what's left unsaid. No slang, no emojis, no exclamation marks.",
         color: "#ffe600",
-        chaos: 20,
+        chaos: 15,
     },
     {
         id: "terminally-online",
         name: "Terminally Online",
         blurb: "Has not touched grass since the last software update.",
         instruction:
-            "Write like someone who is extremely online: current internet slang, irony, lowercase energy, references to group chats and timelines.",
+            "Write like someone who lives on the internet: lowercase, ironic, current meme formats and slang " +
+            "(but nothing that will be dated in a month), group-chat energy. Should read like a viral post, not an ad.",
         color: "#3df2ff",
-        chaos: 70,
-    },
-    {
-        id: "corporate-brainrot",
-        name: "Corporate Brainrot",
-        blurb: "Per my last meme, let's circle back on this joke.",
-        instruction:
-            "Write like a LinkedIn post or office email applied to this photo: synergy, circling back, KPIs, deliverables, delivered with total sincerity.",
-        color: "#9cff57",
-        chaos: 45,
+        chaos: 60,
     },
     {
         id: "unhinged",
         name: "Unhinged",
         blurb: "Our lawyers asked us to stop offering this one.",
         instruction:
-            "Write unhinged, chaotic captions with escalating absurd logic. Keep it funny, never cruel, hateful or sexual.",
+            "Write unhinged captions: start from something true about the photo, then escalate with absurd but " +
+            "internally consistent logic. Chaotic, never cruel, hateful or sexual.",
         color: "#ff3b30",
         chaos: 95,
     },
-    {
-        id: "surrealist",
-        name: "Surrealist",
-        blurb: "The pipe is not a pipe. The meme is not a meme.",
-        instruction: "Write dreamlike, surreal captions with strange but vivid logic, like a joke told in a dream.",
-        color: "#b98cff",
-        chaos: 80,
-    },
-    {
-        id: "2016-internet",
-        name: "2016 Internet",
-        blurb: "Humanity peaked here. We are simply visiting.",
-        instruction:
-            "Write in 2016 meme style: 'me:', 'nobody:', 'when you...', Harambe-era energy, but don't reference real tragedies.",
-        color: "#ff9f1c",
-        chaos: 55,
-    },
-    {
-        id: "deep-fried",
-        name: "Deep Fried",
-        blurb: "Saturation: illegal. Contrast: also illegal.",
-        instruction:
-            "Write loud, deep-fried meme captions: all caps energy, absurd emphasis, a 🅱️ or 💯 is allowed but don't overdo it.",
-        color: "#ff5fd2",
-        chaos: 90,
-    },
-    {
-        id: "academic-nonsense",
-        name: "Academic Nonsense",
-        blurb: "Peer reviewed by two raccoons and a TA.",
-        instruction:
-            "Write like a pompous academic paper, thesis abstract or seminar remark about this photo, with fake rigor.",
-        color: "#f1ede4",
-        chaos: 35,
-    },
-    {
-        id: "boomer-facebook",
-        name: "Boomer Facebook",
-        blurb: "Shared 41 times by your aunt. Minion not included.",
-        instruction:
-            "Write like a boomer Facebook post: wholesome confusion, random capitalization, 'LOL' meaning lots of love, signed off oddly.",
-        color: "#57b8ff",
-        chaos: 60,
-    },
 ];
 
-export function styleById(id: string | null | undefined) {
+// Styles that are no longer offered. Kept only so memes made with them still show the right label.
+const RETIRED_STYLES: HumorStyle[] = [
+    { id: "classic", name: "Classic", blurb: "", instruction: "", color: "#ffe600", chaos: 20 },
+    { id: "corporate-brainrot", name: "Corporate Brainrot", blurb: "", instruction: "", color: "#9cff57", chaos: 45 },
+    { id: "surrealist", name: "Surrealist", blurb: "", instruction: "", color: "#b98cff", chaos: 80 },
+    { id: "2016-internet", name: "2016 Internet", blurb: "", instruction: "", color: "#ff9f1c", chaos: 55 },
+    { id: "deep-fried", name: "Deep Fried", blurb: "", instruction: "", color: "#ff5fd2", chaos: 90 },
+    { id: "academic-nonsense", name: "Academic Nonsense", blurb: "", instruction: "", color: "#f1ede4", chaos: 35 },
+    { id: "boomer-facebook", name: "Boomer Facebook", blurb: "", instruction: "", color: "#57b8ff", chaos: 60 },
+];
+
+// For writing captions: only a style that's currently offered, else the default.
+export function pickStyle(id: string | null | undefined) {
     return HUMOR_STYLES.find((s) => s.id === id) ?? HUMOR_STYLES[0];
+}
+
+// For displaying a meme's label: also knows retired styles.
+export function styleById(id: string | null | undefined) {
+    return HUMOR_STYLES.find((s) => s.id === id) ?? RETIRED_STYLES.find((s) => s.id === id) ?? HUMOR_STYLES[0];
 }
 
 export type MemeFormat = "top" | "overlay" | "bottom";

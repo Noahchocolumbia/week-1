@@ -8,7 +8,7 @@ import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
 // Gemini can take several seconds, so give the server actions room to finish.
 export const maxDuration = 60;
 
-export const metadata = { title: "Studio · Laugh or Laugh" };
+export const metadata = { title: "The Lab · Laugh or Laugh" };
 
 type PhotoRow = {
     id: string;
@@ -57,12 +57,12 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
             <main className="shell" style={{ paddingBottom: 96 }}>
                 <div className="page-top">
                     <p className="mono" style={{ color: "var(--paper-faint)" }}>
-                        Meme generation studio
+                        Meme research facility
                     </p>
-                    <h1 className="display wide page-title">The studio</h1>
+                    <h1 className="display wide page-title">The Lab</h1>
                     <p className="page-lede">
-                        A professional creative tool that has been hijacked by internet trolls. Upload a photo, pick a
-                        humor style, and Gemini writes three captions you can edit, remix, export, or unleash.
+                        Where perfectly good photos go to become memes. Upload one, pick a humor style, and Gemini writes three
+                        captions. Each one posts as its own meme.
                     </p>
                     {error && (
                         <p className="error-line" role="alert">

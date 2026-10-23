@@ -13,6 +13,7 @@ export default function ShareControls({
     caption,
     format,
     showLink = true,
+    compact = false,
 }: {
     captionId: string;
     url: string;
@@ -20,6 +21,8 @@ export default function ShareControls({
     format: MemeFormat;
     // Drafts have no public page yet, so they only get Download.
     showLink?: boolean;
+    // Icons only, for the feed.
+    compact?: boolean;
 }) {
     const { toast } = useApp();
     const [busy, setBusy] = useState(false);
@@ -61,17 +64,36 @@ export default function ShareControls({
     }
 
     return (
-        <div className="share-row">
-            <button type="button" className="icon-btn" onClick={onDownload} disabled={busy} title="Save a PNG with the caption baked in">
-                <Download aria-hidden="true" /> {busy ? "Rendering" : "Download"}
+        <div className={`share-row${compact ? " share-row-compact" : ""}`}>
+            <button
+                type="button"
+                className="icon-btn"
+                onClick={onDownload}
+                disabled={busy}
+                title="Save a PNG with the caption baked in"
+                aria-label={compact ? "Download" : undefined}
+            >
+                <Download aria-hidden="true" /> {!compact && (busy ? "Rendering" : "Download")}
             </button>
             {showLink && (
                 <>
-                    <button type="button" className="icon-btn" onClick={onCopy} title="Copy a link to this meme's page">
-                        <Link2 aria-hidden="true" /> Copy link
+                    <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={onCopy}
+                        title="Copy a link to this meme's page"
+                        aria-label={compact ? "Copy link" : undefined}
+                    >
+                        <Link2 aria-hidden="true" /> {!compact && "Copy link"}
                     </button>
-                    <button type="button" className="icon-btn" onClick={onShare} title="Spread it. Irresponsibly.">
-                        <Share2 aria-hidden="true" /> Share
+                    <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={onShare}
+                        title="Spread it. Irresponsibly."
+                        aria-label={compact ? "Share" : undefined}
+                    >
+                        <Share2 aria-hidden="true" /> {!compact && "Share"}
                     </button>
                 </>
             )}

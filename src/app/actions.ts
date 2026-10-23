@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { buildPrompt, captionImage } from "@/lib/gemini";
-import { isFormat, styleById, type MemeFormat } from "@/lib/styles";
+import { isFormat, pickStyle, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
 import { MAX_PHOTO_BYTES, PHOTO_MIME_TYPES } from "@/lib/uploads";
 
@@ -107,7 +107,7 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     const { bytes, mimeType } = photo;
 
     // The humor style and idea steer what Gemini writes.
-    const style = styleById(options.style).id;
+    const style = pickStyle(options.style).id;
     const format: MemeFormat = isFormat(options.format) ? options.format : "top";
     const prompt = buildPrompt(style, options.idea);
 
@@ -288,7 +288,7 @@ export async function regenerateCaptions(
     const photo = await readPhoto(supabase, image.storage_path);
     if (!photo.ok) return { ok: false, error: "Couldn't read that photo." };
 
-    const style = styleById(options.style ?? image.style).id;
+    const style = pickStyle(options.style ?? image.style).id;
     const prompt = buildPrompt(style, options.idea);
 
     let captions: string[];

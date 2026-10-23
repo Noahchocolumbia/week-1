@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HeroCollage, HeroHeadline, HeroPrompt } from "@/components/Hero";
+import { HeroCollage, HeroCTA, HeroHeadline } from "@/components/Hero";
 import NavBar from "@/components/NavBar";
 import PostCard from "@/components/PostCard";
 import SiteFooter from "@/components/SiteFooter";
@@ -17,7 +17,7 @@ const BAND = [
 
 const PROCESS = [
     { title: "Submit evidence", text: "Upload a photo. Your camera roll is full of crimes waiting to happen." },
-    { title: "Pick a humor style", text: "Nine flavors, from Corporate Brainrot to Boomer Facebook. Choose your weapon." },
+    { title: "Pick a humor style", text: "Three flavors: Deadpan, Terminally Online, or Unhinged. Choose your weapon." },
     { title: "The machine cooks", text: "Gemini writes three captions. You edit, remix, or regenerate until it's legally funny." },
     { title: "Public judgment", text: "Post it. Strangers laugh or meh. The Hall of Shame keeps score forever." },
 ];
@@ -26,12 +26,8 @@ export default async function Home() {
     const { supabase, user, profile } = await getUserAndProfile();
     const { memes } = await loadMemes(supabase, user?.id ?? null);
     const featured = topMemes(memes, 3);
-    // Newest first for the gallery, one caption per photo so it doesn't repeat itself.
-    const seen = new Set<string>();
-    const recent = [...memes]
-        .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
-        .filter((m) => (seen.has(m.imageId) ? false : (seen.add(m.imageId), true)))
-        .slice(0, 9);
+    // Newest first. Every caption is its own meme, so one photo with three captions shows up three times.
+    const recent = [...memes].sort((a, b) => b.postedAt.localeCompare(a.postedAt)).slice(0, 9);
     const latestModel = memes[0]?.model;
 
     return (
@@ -50,7 +46,7 @@ export default async function Home() {
                         <p className="hero-sub">
                             State-of-the-art artificial intelligence dedicated to the advancement of absolute nonsense.
                         </p>
-                        <HeroPrompt signedIn={Boolean(user)} />
+                        <HeroCTA signedIn={Boolean(user)} />
                         <div className="status-row mono" aria-label="System status">
                             <span>
                                 <i className="dot" aria-hidden="true" /> AI online
@@ -117,7 +113,7 @@ export default async function Home() {
                         </ol>
                         <div className="button-row" style={{ justifyContent: "flex-start", marginTop: 32 }}>
                             <Link href={user ? "/generate" : "/login"} className="btn btn-primary btn-big">
-                                {user ? "Open the studio →" : "Sign in to start →"}
+                                {user ? "Enter the lab →" : "Sign in to start →"}
                             </Link>
                         </div>
                     </div>

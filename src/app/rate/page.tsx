@@ -22,16 +22,7 @@ export default async function RatePage() {
         <>
             <NavBar {...navProps(supabase, profile)} />
             <main className="shell">
-                <div className="page-top">
-                    <p className="mono" style={{ color: "var(--paper-faint)" }}>
-                        Court is in session
-                    </p>
-                    <h1 className="display wide page-title">The feed</h1>
-                    <p className="page-lede">
-                        Every caption below was written by a machine. Laugh if it got you. Meh if it didn&apos;t. The
-                        algorithm takes it personally either way.
-                    </p>
-                </div>
+                <h1 className="visually-hidden">The feed</h1>
 
                 {error ? (
                     <div className="empty">

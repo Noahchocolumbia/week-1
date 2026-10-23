@@ -1,5 +1,5 @@
 import "server-only";
-import { styleById } from "@/lib/styles";
+import { pickStyle } from "@/lib/styles";
 
 // Tried in order. Google's servers sometimes answer "busy" (HTTP 503), so the
 // main model gets a second try and then a lighter model takes over.
@@ -14,7 +14,7 @@ export const PROMPT =
 
 // Adds the chosen humor style and the person's own idea to the base prompt.
 export function buildPrompt(styleId?: string | null, idea?: string | null) {
-    const style = styleById(styleId);
+    const style = pickStyle(styleId);
     let prompt = `${PROMPT} Style: ${style.instruction}`;
     const cleaned = (idea ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
     if (cleaned) {
