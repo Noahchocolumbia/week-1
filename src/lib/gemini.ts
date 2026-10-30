@@ -3,6 +3,8 @@ import { pickStyle } from "@/lib/styles";
 
 // Tried in order. Google's servers sometimes answer "busy" (HTTP 503), so the
 // main model gets a second try and then a lighter model takes over.
+// A model that times out is not tried again: waiting on it twice made one
+// request take 30+ seconds before the fallback answered in about one.
 const ATTEMPTS = ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"];
 
 // The base instruction. Saved with every caption (with any style and idea added),
@@ -61,12 +63,16 @@ export async function captionImage(
     });
 
     let lastProblem = "no attempt made";
+    const timedOut = new Set<string>();
+    let tries = 0;
 
-    for (const [index, model] of ATTEMPTS.entries()) {
-        if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const model of ATTEMPTS) {
+        if (timedOut.has(model)) continue;
+        if (tries > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+        const attempt = ++tries;
         const started = Date.now();
         const report = (fields: Omit<Attempt, "model" | "attempt" | "latencyMs">) =>
-            onAttempt?.({ model, attempt: index + 1, latencyMs: Date.now() - started, ...fields });
+            onAttempt?.({ model, attempt, latencyMs: Date.now() - started, ...fields });
 
         let res: Response;
         try {
@@ -79,12 +85,13 @@ export async function captionImage(
                         "x-goog-api-key": process.env.GEMINI_API_KEY!,
                     },
                     body,
-                    // Give up on one attempt after 15 seconds and move to the next.
-                    signal: AbortSignal.timeout(15_000),
+                    // Give up on one attempt after 12 seconds and move to the next.
+                    signal: AbortSignal.timeout(12_000),
                 }
             );
         } catch {
             lastProblem = `${model} timed out`;
+            timedOut.add(model);
             report({ httpStatus: null, ok: false, rawText: null, error: "timed out" });
             console.error(`Gemini: ${lastProblem}`);
             continue;

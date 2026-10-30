@@ -12,6 +12,13 @@ export async function GET(request: Request) {
     const base =
         process.env.NODE_ENV !== "development" && forwardedHost ? `https://${forwardedHost}` : origin;
 
+    // Supabase refuses to create the account when the email isn't on the admin's
+    // allowed domains or whitelist (a database trigger), and reports it this way.
+    const description = searchParams.get("error_description") ?? "";
+    if (!code && /database error saving new user/i.test(description)) {
+        return NextResponse.redirect(`${base}/login?error=not_allowed`);
+    }
+
     if (!code) return NextResponse.redirect(`${base}/login?error=1`);
 
     const supabase = await createClient();
