@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { buildPrompt, captionImage } from "@/lib/gemini";
+import { GenerationLog } from "@/lib/genlog";
 import { isFormat, pickStyle, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
 import { MAX_PHOTO_BYTES, PHOTO_MIME_TYPES } from "@/lib/uploads";
@@ -111,12 +112,17 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     const format: MemeFormat = isFormat(options.format) ? options.format : "top";
     const prompt = buildPrompt(style, options.idea);
 
+    // Logged for the admin panel's generation requests and LLM responses.
+    const log = new GenerationLog(supabase);
+    await log.start({ kind: "generate", style, prompt });
+
     let captions: string[];
     let model: string;
     try {
-        ({ captions, model } = await captionImage(bytes.toString("base64"), mimeType, prompt));
+        ({ captions, model } = await captionImage(bytes.toString("base64"), mimeType, prompt, log.record));
     } catch (error) {
         console.error("generateCaptions:", error);
+        await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
         return discard("The AI is busy right now, so nothing was saved. Try again in a minute.");
     }
 
@@ -126,7 +132,10 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
         .insert({ storage_path: path, style, format })
         .select("id")
         .single<{ id: string }>();
-    if (imageError || !image) return discard("Couldn't save the photo.");
+    if (imageError || !image) {
+        await log.finish({ ok: false, error: "Captions written, but the photo row couldn't be saved." });
+        return discard("Couldn't save the photo.");
+    }
 
     // One row per caption, each recording the prompt and model that produced it.
     const { error: captionError } = await supabase
@@ -135,9 +144,11 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     if (captionError) {
         // Roll back the just-inserted draft so it (and its photo) aren't left behind.
         await supabase.from("images").delete().eq("id", image.id);
+        await log.finish({ ok: false, error: "Captions written, but they couldn't be saved." });
         return discard("Couldn't save the captions.");
     }
 
+    await log.finish({ ok: true, model, captionCount: captions.length, imageId: image.id });
     revalidatePath("/generate");
     return { ok: true, imageId: image.id };
 }
@@ -291,22 +302,33 @@ export async function regenerateCaptions(
     const style = pickStyle(options.style ?? image.style).id;
     const prompt = buildPrompt(style, options.idea);
 
+    const log = new GenerationLog(supabase);
+    await log.start({ kind: "regenerate", style, prompt, imageId: image.id });
+
     let captions: string[];
     let model: string;
     try {
-        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType, prompt));
+        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType, prompt, log.record));
     } catch (error) {
         console.error("regenerateCaptions:", error);
+        await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
         return { ok: false, error: "The AI is busy right now. Your old captions are still here." };
     }
 
     const { error: deleteError } = await supabase.from("captions").delete().eq("image_id", image.id);
-    if (deleteError) return { ok: false, error: "Couldn't replace the captions." };
+    if (deleteError) {
+        await log.finish({ ok: false, error: "Captions written, but the old ones couldn't be replaced." });
+        return { ok: false, error: "Couldn't replace the captions." };
+    }
 
     const { error: insertError } = await supabase
         .from("captions")
         .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
-    if (insertError) return { ok: false, error: "Couldn't save the new captions." };
+    if (insertError) {
+        await log.finish({ ok: false, error: "Captions written, but they couldn't be saved." });
+        return { ok: false, error: "Couldn't save the new captions." };
+    }
+    await log.finish({ ok: true, model, captionCount: captions.length });
 
     // Remember the style, so the label on the meme matches what wrote it.
     if (style !== image.style) await supabase.from("images").update({ style }).eq("id", image.id);

@@ -26,6 +26,17 @@ export function buildPrompt(styleId?: string | null, idea?: string | null) {
 
 type Part = { text?: string; thought?: boolean };
 
+// One call to one model, reported back so the app can log it (see src/lib/genlog.ts).
+export type Attempt = {
+    model: string;
+    attempt: number;
+    httpStatus: number | null;
+    ok: boolean;
+    rawText: string | null;
+    latencyMs: number;
+    error: string | null;
+};
+
 // "Busy" or "slow down" answers that are worth trying again.
 const RETRYABLE = [429, 500, 503];
 
@@ -33,7 +44,8 @@ const RETRYABLE = [429, 500, 503];
 export async function captionImage(
     imageBase64: string,
     mimeType: string,
-    prompt: string = PROMPT
+    prompt: string = PROMPT,
+    onAttempt?: (attempt: Attempt) => void
 ): Promise<{ captions: string[]; model: string }> {
     const body = JSON.stringify({
         contents: [
@@ -52,6 +64,9 @@ export async function captionImage(
 
     for (const [index, model] of ATTEMPTS.entries()) {
         if (index > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+        const started = Date.now();
+        const report = (fields: Omit<Attempt, "model" | "attempt" | "latencyMs">) =>
+            onAttempt?.({ model, attempt: index + 1, latencyMs: Date.now() - started, ...fields });
 
         let res: Response;
         try {
@@ -70,12 +85,19 @@ export async function captionImage(
             );
         } catch {
             lastProblem = `${model} timed out`;
+            report({ httpStatus: null, ok: false, rawText: null, error: "timed out" });
             console.error(`Gemini: ${lastProblem}`);
             continue;
         }
 
         if (!res.ok) {
             lastProblem = `${model} answered ${res.status}`;
+            report({
+                httpStatus: res.status,
+                ok: false,
+                rawText: (await res.text().catch(() => "")).slice(0, 2000) || null,
+                error: `HTTP ${res.status}`,
+            });
             console.error(`Gemini: ${lastProblem}`);
             if (RETRYABLE.includes(res.status)) continue;
             break; // A bad key or bad request won't improve by retrying.
@@ -100,6 +122,12 @@ export async function captionImage(
             .map((c) => c.trim())
             .slice(0, 3);
 
+        report({
+            httpStatus: res.status,
+            ok: captions.length > 0,
+            rawText: text.slice(0, 4000),
+            error: captions.length > 0 ? null : "no usable captions",
+        });
         if (captions.length > 0) return { captions, model };
 
         lastProblem = `${model} returned no usable captions`;
