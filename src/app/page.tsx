@@ -24,10 +24,15 @@ const PROCESS = [
 
 export default async function Home() {
     const { supabase, user, profile } = await getUserAndProfile();
-    const { memes } = await loadMemes(supabase, user?.id ?? null);
-    const featured = topMemes(memes, 3);
-    // Newest first. Every caption is its own meme, so one photo with three captions shows up three times.
-    const recent = [...memes].sort((a, b) => b.postedAt.localeCompare(a.postedAt)).slice(0, 9);
+    // The homepage only shows a dozen memes, so only fetch the newest photos.
+    const { memes } = await loadMemes(supabase, user?.id ?? null, { images: 12 });
+    // One meme per photo in the collage, so the three cards are three different pictures.
+    const featured = topMemes(memes, memes.length)
+        .filter((m, i, all) => all.findIndex((o) => o.imageId === m.imageId) === i)
+        .slice(0, 3);
+    // loadMemes already spreads each photo's captions apart, newest photos first.
+    // Re-sorting by date here would put a photo's captions back next to each other.
+    const recent = memes.slice(0, 9);
     const latestModel = memes[0]?.model;
 
     return (

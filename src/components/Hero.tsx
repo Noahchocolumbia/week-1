@@ -63,7 +63,7 @@ export function HeroCollage({ memes }: { memes: PostMeme[] }) {
                 <motion.div
                     key={meme.captionId}
                     className="collage-card"
-                    initial={{ opacity: 0, y: 60, rotate: 0 }}
+                    initial={{ opacity: 1, y: 24, rotate: 0 }}
                     animate={{
                         opacity: 1,
                         rotate: spread ? fanned[i] : rest[i],

@@ -68,8 +68,9 @@ export default function VoteButtons({
 
     const scoreBox = (
         <div className="score-box" title="Laughs minus mehs">
-            <strong>{score > 0 ? `+${score}` : score}</strong>
-            <span className="mono">Score</span>
+            {/* With no votes yet, "New" reads better than a row of zeros. */}
+            <strong>{votes === 0 ? "New" : score > 0 ? `+${score}` : score}</strong>
+            <span className="mono">{votes === 0 ? "Be first" : "Score"}</span>
         </div>
     );
 
@@ -79,11 +80,11 @@ export default function VoteButtons({
             <div className="reactions">
                 <Link href="/login" className="reaction reaction-laugh" title="Sign in to laugh">
                     <span className="face" aria-hidden="true">😂</span>
-                    Laugh <b>{laughs}</b>
+                    Laugh {laughs > 0 && <b>{laughs}</b>}
                 </Link>
                 <Link href="/login" className="reaction reaction-meh" title="Sign in to meh">
                     <span className="face" aria-hidden="true">😐</span>
-                    Meh <b>{mehs}</b>
+                    Meh {mehs > 0 && <b>{mehs}</b>}
                 </Link>
                 {scoreBox}
             </div>
@@ -101,7 +102,7 @@ export default function VoteButtons({
                     title={vote === 1 ? "Take the laugh back" : "It got you"}
                 >
                     <span className="face" aria-hidden="true">😂</span>
-                    Laugh <b>{laughs}</b>
+                    Laugh {laughs > 0 && <b>{laughs}</b>}
                 </button>
                 <button
                     type="button"
@@ -111,7 +112,7 @@ export default function VoteButtons({
                     title={vote === -1 ? "Take the meh back" : "It didn't"}
                 >
                     <span className="face" aria-hidden="true">😐</span>
-                    Meh <b>{mehs}</b>
+                    Meh {mehs > 0 && <b>{mehs}</b>}
                 </button>
                 {scoreBox}
             </div>

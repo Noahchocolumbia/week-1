@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import SiteFooter from "@/components/SiteFooter";
@@ -48,8 +49,7 @@ export default async function TopPage() {
                                 <li key={meme.captionId}>
                                     <Link href={`/m/${meme.captionId}`} className="rank-item">
                                         <span className="rank-num">{String(index + 1).padStart(2, "0")}</span>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={meme.url} alt="" className="rank-thumb" loading="lazy" />
+                                        <Image src={meme.url} alt="" className="rank-thumb" width={160} height={160} sizes="96px" />
                                         <div>
                                             <p className="rank-caption">{meme.content}</p>
                                             <p className="rank-sub mono">

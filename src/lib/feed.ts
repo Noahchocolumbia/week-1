@@ -87,14 +87,16 @@ function toMeme(
 
 // Every published meme (one per caption) with its totals, and this user's own vote.
 // Works logged out too: published memes and their totals are public.
-export async function loadMemes(supabase: Supabase, userId: string | null) {
+// Pass `images` to fetch only that many of the newest photos.
+export async function loadMemes(supabase: Supabase, userId: string | null, opts: { images?: number } = {}) {
+    let query = supabase
+        .from("images")
+        .select(IMAGE_FIELDS)
+        .eq("published", true)
+        .order("created_at", { ascending: false });
+    if (opts.images) query = query.limit(opts.images);
     const [images, { scoreOf, voteOf }] = await Promise.all([
-        supabase
-            .from("images")
-            .select(IMAGE_FIELDS)
-            .eq("published", true)
-            .order("created_at", { ascending: false })
-            .returns<ImageRow[]>(),
+        query.returns<ImageRow[]>(),
         totalsAndVotes(supabase, userId),
     ]);
 
