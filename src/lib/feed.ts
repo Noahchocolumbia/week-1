@@ -169,3 +169,25 @@ export async function loadMemePreview(supabase: Supabase, captionId: string) {
 export function topMemes(memes: Meme[], count: number) {
     return [...memes].sort((a, b) => b.score - a.score || b.votes - a.votes).slice(0, count);
 }
+
+// The homepage's time tabs. `days: null` means no cutoff.
+export const RANGES = [
+    { id: "week", label: "Past week", days: 7 },
+    { id: "month", label: "Past month", days: 30 },
+    { id: "year", label: "Past year", days: 365 },
+    { id: "all", label: "All time", days: null },
+] as const;
+
+export type Range = (typeof RANGES)[number];
+
+// Reads ?range= from the URL. Anything unknown falls back to Past week.
+export function pickRange(value: string | string[] | undefined): Range {
+    return RANGES.find((r) => r.id === value) ?? RANGES[0];
+}
+
+// Only memes posted inside the window. Scores still count every vote ever cast.
+export function postedWithin(memes: Meme[], range: Range) {
+    if (range.days === null) return memes;
+    const cutoff = Date.now() - range.days * 24 * 60 * 60 * 1000;
+    return memes.filter((m) => new Date(m.postedAt).getTime() >= cutoff);
+}

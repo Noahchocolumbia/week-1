@@ -86,6 +86,9 @@ export default function NavBar({ signedIn = true, avatarUrl = null, initial = "?
                                 {link.label}
                             </Link>
                         ))}
+                        <Link href={signedIn ? "/generate" : "/login"} className="nav-generate">
+                            Generate captions
+                        </Link>
                     </nav>
 
                     <div className="header-actions">

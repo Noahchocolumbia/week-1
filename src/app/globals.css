@@ -195,6 +195,20 @@ main {
   color: var(--yellow);
 }
 
+/* "Generate captions" sits in the nav as a solid yellow tab, set apart from the plain links. */
+.main-nav a.nav-generate {
+  margin-left: 8px;
+  background: var(--yellow);
+  color: var(--yellow-ink);
+  font-weight: 600;
+}
+
+.main-nav a.nav-generate:hover {
+  color: var(--yellow-ink);
+  box-shadow: 4px 4px 0 var(--paper);
+  transform: translate(-2px, -2px);
+}
+
 .main-nav a[aria-current="page"]::after {
   content: "";
   position: absolute;
@@ -2260,4 +2274,198 @@ html:has(.feed) {
 
 .feed .reaction-status:empty {
   display: none;
+}
+
+/* ---------------------------------------------------------------
+   Homepage: time tabs above a ranked grid (3 / 2 / 1 columns)
+   --------------------------------------------------------------- */
+
+.home {
+  --feed-bottom: 0px;
+  padding-bottom: 120px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* Every card in a row is as tall as the tallest one. The black meme area takes up
+   the extra space (photo centered in it), so the reactions line up along the bottom. */
+.home-grid .post {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-grid .post > :nth-child(2),
+.home-grid .post .meme {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-grid .post .meme img {
+  margin: auto 0;
+}
+
+/* Photos fill the card's full width at their own shape: no black side bars, nothing cropped. */
+.home-grid .meme img {
+  max-height: none;
+}
+
+.home-grid .post:hover {
+  border-color: var(--yellow);
+  box-shadow: 8px 8px 0 var(--yellow);
+  transform: translate(-3px, -3px);
+}
+
+@media (max-width: 1100px) {
+  .home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .home {
+    --feed-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.range-bar {
+  justify-content: space-between;
+}
+
+.range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.range-tab {
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  margin-left: -1px;
+  color: var(--paper-dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.range-tab:first-child {
+  margin-left: 0;
+}
+
+.range-tab:hover {
+  color: var(--paper);
+  border-color: var(--paper);
+  position: relative;
+}
+
+.range-tab[aria-current="page"] {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--yellow-ink);
+  position: relative;
+}
+
+.range-count {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* Floating button, like Crackd's, above the phone tab bar when there is one. */
+.generate-fab {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + var(--feed-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+}
+
+.generate-fab:hover {
+  transform: translate(calc(-50% - 2px), -2px);
+}
+
+@media (max-width: 760px) {
+  .range-count {
+    display: none;
+  }
+}
+
+/* Homepage card footer: reactions + score on one row, then a flush icon toolbar along the card's bottom edge. */
+.home-grid .post-foot {
+  padding: 0;
+}
+
+.home-grid .reactions {
+  align-items: center;
+  gap: 0;
+  padding: 12px 14px;
+}
+
+.home-grid .reaction {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 0.74rem;
+}
+
+/* Laugh and Meh share a border, so they read as one control. */
+.home-grid .reaction + .reaction {
+  margin-left: -1px;
+}
+
+.home-grid .score-box strong {
+  font-size: 1.25rem;
+}
+
+.home-grid .score-box span {
+  font-size: 0.62rem;
+}
+
+.home-grid .reaction-status {
+  min-height: 0;
+  margin: -4px 14px 10px;
+  font-size: 0.68rem;
+}
+
+.home-grid .share-row {
+  margin: 0;
+  gap: 0;
+  flex-wrap: nowrap;
+  border-top: 1px solid var(--line);
+}
+
+.home-grid .share-row .icon-btn {
+  flex: 1;
+  justify-content: center;
+  min-height: 42px;
+  border: none;
+  border-right: 1px solid var(--line);
+}
+
+.home-grid .share-row .icon-btn:last-child {
+  border-right: none;
+}
+
+.home-grid .share-row .icon-btn:hover {
+  background: var(--bg-sunk);
+  color: var(--paper);
+}
+
+/* The joined buttons overlap by 1px; bring the hovered or selected one to the front so all four edges show. */
+.home-grid .reaction {
+  position: relative;
+}
+
+.home-grid .reaction:hover,
+.home-grid .reaction:focus-visible,
+.home-grid .reaction[aria-pressed="true"] {
+  z-index: 1;
 }

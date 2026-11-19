@@ -1,130 +1,82 @@
 import Link from "next/link";
-import { HeroCollage, HeroCTA, HeroHeadline } from "@/components/Hero";
 import NavBar from "@/components/NavBar";
 import PostCard from "@/components/PostCard";
-import SiteFooter from "@/components/SiteFooter";
-import { loadMemes, topMemes } from "@/lib/feed";
-import { modelName } from "@/lib/format";
+import { loadMemes, pickRange, postedWithin, RANGES, topMemes } from "@/lib/feed";
 import { getUserAndProfile, navProps } from "@/lib/supabase-server";
 
-const BAND = [
-    "Advanced technology. Questionable outcomes",
-    "Generate something deeply unnecessary",
-    "Certified internet garbage",
-    "Professionally engineered stupidity",
-    "Your creativity has been outsourced",
-];
+// The homepage is the feed as a grid: the best memes from the chosen time window, highest score first.
+// The tabs are plain links (?range=week, ?range=all, ...), so they work without any client JavaScript.
+export default async function Home({ searchParams }: { searchParams: Promise<{ range?: string | string[] }> }) {
+    const { range: rangeParam } = await searchParams;
 
-const PROCESS = [
-    { title: "Submit evidence", text: "Upload a photo. Your camera roll is full of crimes waiting to happen." },
-    { title: "Pick a humor style", text: "Three flavors: Deadpan, Terminally Online, or Unhinged. Choose your weapon." },
-    { title: "The machine cooks", text: "Gemini writes three captions. You edit, remix, or regenerate until it's legally funny." },
-    { title: "Public judgment", text: "Post it. Strangers laugh or meh. The Hall of Shame keeps score forever." },
-];
-
-export default async function Home() {
     const { supabase, user, profile } = await getUserAndProfile();
-    // The homepage only shows a dozen memes, so only fetch the newest photos.
-    const { memes } = await loadMemes(supabase, user?.id ?? null, { images: 12 });
-    // One meme per photo in the collage, so the three cards are three different pictures.
-    const featured = topMemes(memes, memes.length)
-        .filter((m, i, all) => all.findIndex((o) => o.imageId === m.imageId) === i)
-        .slice(0, 3);
-    // loadMemes already spreads each photo's captions apart, newest photos first.
-    // Re-sorting by date here would put a photo's captions back next to each other.
-    const recent = memes.slice(0, 9);
-    const latestModel = memes[0]?.model;
+    const { error, memes } = await loadMemes(supabase, user?.id ?? null);
+
+    // With no tab picked, start on the shortest window that has something in it,
+    // so the homepage never opens on an empty "Past week".
+    const range = rangeParam
+        ? pickRange(rangeParam)
+        : (RANGES.find((r) => postedWithin(memes, r).length > 0) ?? pickRange(undefined));
+    const ranked = topMemes(postedWithin(memes, range), memes.length);
+    const signedIn = Boolean(user);
 
     return (
         <>
-            <NavBar signedIn={Boolean(user)} {...navProps(supabase, profile)} />
-            <main>
-                <section className="shell hero">
-                    <div>
-                        <div className="hero-kicker mono">
-                            <span>Dept. of Nonsense / NYC</span>
-                            <span>
-                                {user && profile?.first_name ? `Welcome back, ${profile.first_name}` : "Est. 2026"}
-                            </span>
-                        </div>
-                        <HeroHeadline />
-                        <p className="hero-sub">
-                            State-of-the-art artificial intelligence dedicated to the advancement of absolute nonsense.
-                        </p>
-                        <HeroCTA signedIn={Boolean(user)} />
-                        <div className="status-row mono" aria-label="System status">
-                            <span>
-                                <i className="dot" aria-hidden="true" /> AI online
-                            </span>
-                            <span>
-                                <i className="dot dot-cyan" aria-hidden="true" />{" "}
-                                {latestModel ? modelName(latestModel) : "Gemini"}
-                            </span>
-                            <span>
-                                <i className="dot dot-red" aria-hidden="true" /> {memes.length} memes in circulation
-                            </span>
-                        </div>
-                    </div>
-                    {featured.length > 0 && <HeroCollage memes={featured} />}
-                </section>
+            <NavBar signedIn={signedIn} {...navProps(supabase, profile)} />
+            <main className="shell">
+                <h1 className="visually-hidden">Top memes, {range.label.toLowerCase()}</h1>
 
-                <div className="band" aria-hidden="true">
-                    <div className="band-track">
-                        {[...BAND, ...BAND].map((text, i) => (
-                            <span key={i}>{text}</span>
-                        ))}
-                    </div>
-                </div>
-
-                {recent.length > 0 && (
-                    <section className="section">
-                        <div className="shell">
-                            <div className="section-head">
-                                <h2 className="display wide section-title">
-                                    Recent crimes
-                                    <br />
-                                    against comedy
-                                </h2>
-                                <p className="section-note">
-                                    A curated exhibition of questionable internet history. Every caption machine-written.{" "}
-                                    <Link href="/top" className="link">
-                                        See the Hall of Shame
-                                    </Link>
-                                </p>
-                            </div>
-                            <div className="gallery">
-                                {recent.map((meme, i) => (
-                                    <PostCard key={meme.captionId} meme={meme} signedIn={Boolean(user)} variant="exhibit" exhibit={i + 1} />
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                )}
-
-                <section className="section">
-                    <div className="shell">
-                        <div className="section-head">
-                            <h2 className="display wide section-title">How the sausage is made</h2>
-                            <p className="section-note">Four steps. Zero oversight.</p>
-                        </div>
-                        <ol className="process">
-                            {PROCESS.map((step, i) => (
-                                <li key={step.title}>
-                                    <span className="step-num">{String(i + 1).padStart(2, "0")}</span>
-                                    <h3>{step.title}</h3>
-                                    <p>{step.text}</p>
-                                </li>
+                <div className="home">
+                    <nav className="feed-progress range-bar mono" aria-label="Time range">
+                        <div className="range-tabs">
+                            {RANGES.map((r) => (
+                                <Link
+                                    key={r.id}
+                                    href={`/?range=${r.id}`}
+                                    scroll={false}
+                                    className="range-tab"
+                                    aria-current={r.id === range.id ? "page" : undefined}
+                                >
+                                    {r.label}
+                                </Link>
                             ))}
-                        </ol>
-                        <div className="button-row" style={{ justifyContent: "flex-start", marginTop: 32 }}>
-                            <Link href={user ? "/generate" : "/login"} className="btn btn-primary btn-big">
-                                {user ? "Enter the lab →" : "Sign in to start →"}
-                            </Link>
                         </div>
-                    </div>
-                </section>
+                        <span className="range-count">{ranked.length} ranked</span>
+                    </nav>
+
+                    {error ? (
+                        <div className="empty">
+                            <h2 className="display">Feed offline.</h2>
+                            <p>The memes didn&apos;t load. Refresh the page and try again.</p>
+                        </div>
+                    ) : ranked.length === 0 ? (
+                        <div className="empty">
+                            <h2 className="display">Quiet {range.id === "all" ? "forever" : range.label.toLowerCase()}.</h2>
+                            <p>Nothing was posted in this window. Somebody has to go first.</p>
+                            <div className="button-row">
+                                {range.id !== "all" && (
+                                    <Link href="/?range=all" className="btn" scroll={false}>
+                                        See all time
+                                    </Link>
+                                )}
+                                <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary">
+                                    Make one
+                                </Link>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="home-grid">
+                            {ranked.map((meme, index) => (
+                                <PostCard key={meme.captionId} meme={meme} signedIn={signedIn} eager={index < 3} />
+                            ))}
+                        </div>
+                    )}
+
+                    <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary generate-fab">
+                        Generate captions
+                    </Link>
+                </div>
             </main>
-            <SiteFooter />
         </>
     );
 }
