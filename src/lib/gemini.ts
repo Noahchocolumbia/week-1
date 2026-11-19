@@ -10,7 +10,7 @@ const ATTEMPTS = ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite
 // The base instruction. Saved with every caption (with any style and idea added),
 // so the database records exactly what was asked.
 export const PROMPT =
-    "You write captions for a photo feed used by college students in New York City. " +
+    "You write captions for a photo feed with a Gen Z sense of humor. " +
     "Look at this photo and write 3 short, funny captions for it, each under 15 words, " +
     "each with a different angle. Return only a JSON array of 3 strings.";
 

@@ -339,10 +339,11 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
     const [pick, setPick] = useState(0);
     const [editing, setEditing] = useState(false);
     const [text, setText] = useState("");
-    const [remixStyle, setRemixStyle] = useState(
-        HUMOR_STYLES.find((s) => s.id !== draft.style)?.id ?? HUMOR_STYLES[0].id
+    // The style the next Regenerate uses. Starts on the photo's own style (or the default for a retired one).
+    const [nextStyle, setNextStyle] = useState(
+        HUMOR_STYLES.find((s) => s.id === draft.style)?.id ?? HUMOR_STYLES[0].id
     );
-    const [busy, setBusy] = useState<null | "regen" | "remix">(null);
+    const [busy, setBusy] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [error, setError] = useState("");
 
@@ -371,21 +372,22 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
         });
     }
 
-    async function regenerate(mode: "regen" | "remix") {
-        setBusy(mode);
+    // New captions for this photo in whichever style is picked in the dropdown.
+    async function regenerate() {
+        const switching = nextStyle !== draft.style;
+        setBusy(true);
         setError("");
-        // No idea passed: the control-panel idea box belongs to the new-upload flow,
-        // not to an existing draft. Regenerate keeps the style; Remix switches it.
-        const result = await regenerateCaptions(draft.id, mode === "remix" ? { style: remixStyle } : {});
-        setBusy(null);
+        // No idea passed: the control-panel idea box belongs to the new-upload flow, not to an existing draft.
+        const result = await regenerateCaptions(draft.id, { style: nextStyle });
+        setBusy(false);
         if (!result.ok) return setError(`Error: ${result.error ?? "the AI declined. Try again."}`);
         setPick(0);
         setEditing(false);
-        toast(mode === "remix" ? `Remixed as ${styleById(remixStyle).name}. No one asked.` : "Fresh captions. Same photo. New crimes.");
+        toast(switching ? `Rewritten as ${styleById(nextStyle).name}. No one asked.` : "Fresh captions. Same photo. New crimes.");
     }
 
     if (busy) {
-        const s = styleById(busy === "remix" ? remixStyle : draft.style);
+        const s = styleById(nextStyle);
         return <Cooking styleName={s.name} color={s.color} />;
     }
 
@@ -566,23 +568,18 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                         Not funny enough?
                     </p>
                     <div className="tool-row">
-                        <button type="button" className="btn btn-small" onClick={() => regenerate("regen")} title="Same style, new attempt">
-                            Regenerate
-                        </button>
-                    </div>
-                    <div className="tool-row" style={{ marginTop: 6 }}>
-                        <label className="visually-hidden" htmlFor="remix-style">
-                            Remix in a different style
+                        <label className="visually-hidden" htmlFor="regen-style">
+                            Style for the new captions
                         </label>
-                        <select id="remix-style" className="select" value={remixStyle} onChange={(e) => setRemixStyle(e.target.value)}>
+                        <select id="regen-style" className="select" value={nextStyle} onChange={(e) => setNextStyle(e.target.value)}>
                             {HUMOR_STYLES.map((s) => (
                                 <option key={s.id} value={s.id}>
-                                    {s.name}
+                                    {s.id === draft.style ? `${s.name} (current)` : s.name}
                                 </option>
                             ))}
                         </select>
-                        <button type="button" className="btn btn-small" onClick={() => regenerate("remix")} title="Same photo, different personality">
-                            Remix
+                        <button type="button" className="btn btn-small" onClick={regenerate} title="New captions for this photo in the selected style">
+                            {nextStyle === draft.style ? "Regenerate" : `Regenerate as ${styleById(nextStyle).name}`}
                         </button>
                     </div>
                 </div>

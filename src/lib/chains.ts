@@ -5,10 +5,12 @@ import type { createClient } from "@/lib/supabase-server";
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Step = { step_order: number; name: string; instruction: string };
 
-// Humor styles that run as a real prompt chain (steps edited in the laugh-chains tool).
-// Any other style keeps the single prompt in gemini.ts.
+// Each humor style runs as a real prompt chain (steps edited in the laugh-chains tool).
+// A style missing here, or a chain that can't be read, falls back to the single prompt in gemini.ts.
 const CHAIN_FOR_STYLE: Record<string, string> = {
     deadpan: "Deadpan",
+    "terminally-online": "Terminally Online",
+    unhinged: "Unhinged",
 };
 
 // The chain's steps, in order, or null if this style has no chain or it can't be read.
