@@ -15,7 +15,7 @@ type PhotoRow = {
     published: boolean;
     style: string;
     format: string;
-    captions: { id: string; content: string; edited: boolean; created_at: string }[];
+    captions: { id: string; content: string; edited: boolean; created_at: string; style: string | null }[];
 };
 
 // Gated route: only signed-in users can make memes.
@@ -32,7 +32,7 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
     const [{ data, error }, scoreOf] = await Promise.all([
         supabase
             .from("images")
-            .select("id, storage_path, published, style, format, captions(id, content, edited, created_at)")
+            .select("id, storage_path, published, style, format, captions(id, content, edited, created_at, style)")
             .eq("profile_id", user.id)
             .order("created_at", { ascending: false })
             .returns<PhotoRow[]>(),
@@ -48,7 +48,13 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
         published: row.published,
         captions: [...row.captions]
             .sort((a, b) => a.created_at.localeCompare(b.created_at))
-            .map((c) => ({ id: c.id, content: c.content, edited: c.edited, ...(scoreOf.get(c.id) ?? { score: 0, votes: 0 }) })),
+            .map((c) => ({
+                id: c.id,
+                content: c.content,
+                edited: c.edited,
+                style: c.style ?? row.style,
+                ...(scoreOf.get(c.id) ?? { score: 0, votes: 0 }),
+            })),
     }));
 
     return (
@@ -61,8 +67,8 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
                     </p>
                     <h1 className="display wide page-title">The Lab</h1>
                     <p className="page-lede">
-                        Where perfectly good photos go to become memes. Upload one, pick a humor style, and Gemini writes three
-                        captions. Each one posts as its own meme.
+                        Where perfectly good photos go to become memes. Upload one and four prompt chains each write a caption in
+                        their own style. Pick the ones worth posting.
                     </p>
                     {error && (
                         <p className="error-line" role="alert">

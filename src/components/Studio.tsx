@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import {
@@ -17,10 +16,11 @@ import MemeImage from "@/components/MemeImage";
 import { useApp } from "@/components/Providers";
 import ShareControls from "@/components/ShareControls";
 import { createClient } from "@/lib/supabase";
-import { HUMOR_STYLES, assess, promptQuip, styleById, type MemeFormat } from "@/lib/styles";
+import { HUMOR_STYLES, MIX_STYLE, assess, promptQuip, styleById, type MemeFormat } from "@/lib/styles";
 import { MAX_PHOTO_BYTES, PHOTO_TYPES } from "@/lib/uploads";
 
-export type StudioCaption = { id: string; content: string; edited: boolean; score: number; votes: number };
+// `style` is the humor style (prompt chain) that wrote this caption.
+export type StudioCaption = { id: string; content: string; edited: boolean; style: string; score: number; votes: number };
 export type StudioImage = {
     id: string;
     url: string;
@@ -50,17 +50,15 @@ export default function Studio({
     const [preview, setPreview] = useState<string | null>(null);
     const [dragging, setDragging] = useState(false);
     const [idea, setIdea] = useState(initialIdea);
-    const [styleId, setStyleId] = useState(HUMOR_STYLES[0].id);
     // Every meme uses the Headline layout (caption bar above the photo).
     const format: MemeFormat = "top";
-    const [cooking, setCooking] = useState<null | { styleId: string }>(null);
+    const [cooking, setCooking] = useState(false);
     const [error, setError] = useState("");
 
     // --- Workspace ---
     const [activeId, setActiveId] = useState<string | null>(drafts[0]?.id ?? null);
     const active = drafts.find((d) => d.id === activeId) ?? null;
 
-    const style = styleById(styleId);
     const quip = promptQuip(idea);
     // Every caption is posted as its own meme.
     const postedCount = posted.reduce((n, image) => n + image.captions.length, 0);
@@ -84,7 +82,7 @@ export default function Studio({
         if (!file) return setError("Error: no evidence submitted. Add a photo first.");
         const ext = PHOTO_TYPES[file.type];
         setError("");
-        setCooking({ styleId });
+        setCooking(true);
 
         // 1. The photo goes to Supabase Storage, in a folder named after the user.
         const path = `${userId}/${crypto.randomUUID()}.${ext}`;
@@ -92,13 +90,13 @@ export default function Studio({
             .storage.from("photos")
             .upload(path, file, { contentType: file.type });
         if (uploadError) {
-            setCooking(null);
+            setCooking(false);
             return setError("Error: upload failed. The internet blinked. Try again.");
         }
 
-        // 2. The server asks Gemini for captions in the chosen style and saves a draft.
-        const result = await generateCaptions(path, { style: styleId, idea, format });
-        setCooking(null);
+        // 2. The server runs every humor style's prompt chain (one caption each) and saves a draft.
+        const result = await generateCaptions(path, { idea, format });
+        setCooking(false);
         if (!result.ok) return setError(`Error: ${result.error}`);
 
         setFile(null);
@@ -183,54 +181,6 @@ export default function Studio({
                         </p>
                     </div>
 
-                    <div className="step">
-                        <div className="step-label">
-                            <strong>03 Humor style</strong>
-                            <span className="mono">{HUMOR_STYLES.length} flavors</span>
-                        </div>
-                        <div className="styles-grid" role="group" aria-label="Humor style">
-                            {HUMOR_STYLES.map((s) => (
-                                <button
-                                    key={s.id}
-                                    type="button"
-                                    className="style-option"
-                                    aria-pressed={styleId === s.id}
-                                    onClick={() => setStyleId(s.id)}
-                                    title={s.blurb}
-                                >
-                                    {styleId === s.id && (
-                                        <motion.span
-                                            layoutId="style-highlight"
-                                            className="highlight"
-                                            style={{ background: s.color }}
-                                            transition={{ type: "spring", stiffness: 500, damping: 34 }}
-                                        />
-                                    )}
-                                    {s.name}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="style-readout">
-                            <p>{style.blurb}</p>
-                            <div className="chaos-meter" aria-label={`Chaos level ${style.chaos} out of 100`}>
-                                <p className="mono">
-                                    <span>Chaos</span>
-                                    <span>{style.chaos}%</span>
-                                </p>
-                                <div className="chaos-bars" aria-hidden="true">
-                                    {Array.from({ length: 10 }, (_, i) => (
-                                        <motion.i
-                                            key={i}
-                                            className={`${i < Math.round(style.chaos / 10) ? "on" : ""} ${i >= 8 ? "hot" : ""}`}
-                                            animate={{ scaleY: i < Math.round(style.chaos / 10) ? 1 : 0.5 }}
-                                            transition={{ delay: i * 0.02 }}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div className="generate-step">
                         <Magnetic strength={0.12}>
                             <button
@@ -248,7 +198,7 @@ export default function Studio({
                                 {error}
                             </p>
                         ) : (
-                            <p className="mono">Three captions. Three memes. No refunds.</p>
+                            <p className="mono">{HUMOR_STYLES.length} chains. {HUMOR_STYLES.length} captions. No refunds.</p>
                         )}
                     </div>
                 </section>
@@ -260,7 +210,7 @@ export default function Studio({
                         <span>{active ? `Draft ${active.id.slice(0, 6)}` : "Idle"}</span>
                     </div>
                     {cooking ? (
-                        <Cooking styleName={styleById(cooking.styleId).name} color={styleById(cooking.styleId).color} />
+                        <Cooking styleName={MIX_STYLE.name} color={MIX_STYLE.color} />
                     ) : active ? (
                         <Workspace key={active.id} draft={active} onGone={() => setActiveId(null)} />
                     ) : (
@@ -341,7 +291,7 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
     const [text, setText] = useState("");
     // The style the next Regenerate uses. Starts on the photo's own style (or the default for a retired one).
     const [nextStyle, setNextStyle] = useState(
-        HUMOR_STYLES.find((s) => s.id === draft.style)?.id ?? HUMOR_STYLES[0].id
+        [MIX_STYLE, ...HUMOR_STYLES].find((s) => s.id === draft.style)?.id ?? MIX_STYLE.id
     );
     const [busy, setBusy] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -491,6 +441,9 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                                 >
                                     <span className="letter">{LETTERS[i] ?? i + 1}</span>
                                     <span>
+                                        <span className="mono variation-style" style={{ color: styleById(c.style).color }}>
+                                            {styleById(c.style).name}
+                                        </span>
                                         {c.content}
                                         {c.edited && <span className="mono human-tag"> (edited)</span>}
                                     </span>
@@ -572,9 +525,10 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                             Style for the new captions
                         </label>
                         <select id="regen-style" className="select" value={nextStyle} onChange={(e) => setNextStyle(e.target.value)}>
-                            {HUMOR_STYLES.map((s) => (
+                            {[MIX_STYLE, ...HUMOR_STYLES].map((s) => (
                                 <option key={s.id} value={s.id}>
-                                    {s.id === draft.style ? `${s.name} (current)` : s.name}
+                                    {s.id === MIX_STYLE.id ? "Mix (one of each)" : s.name}
+                                    {s.id === draft.style ? " (current)" : ""}
                                 </option>
                             ))}
                         </select>
@@ -607,7 +561,7 @@ function PostedMeme({ image, caption }: { image: StudioImage; caption: StudioCap
     const { toast } = useApp();
     const [pending, startTransition] = useTransition();
     const [confirm, setConfirm] = useState(false);
-    const style = styleById(image.style);
+    const style = styleById(caption.style);
 
     return (
         <article className="post">

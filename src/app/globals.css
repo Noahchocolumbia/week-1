@@ -2510,3 +2510,13 @@ html:has(.feed) {
   gap: 16px;
   margin-top: 32px;
 }
+
+
+/* Lab: which prompt chain wrote each variation. */
+.variation-style {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}

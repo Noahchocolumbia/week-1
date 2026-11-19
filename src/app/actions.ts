@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { loadChain, runChain, type Chain } from "@/lib/chains";
 import { buildPrompt, captionImage, type Attempt } from "@/lib/gemini";
 import { GenerationLog } from "@/lib/genlog";
-import { isFormat, pickStyle, type MemeFormat } from "@/lib/styles";
+import { HUMOR_STYLES, isFormat, MIX_STYLE, pickStyle, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
 import { MAX_PHOTO_BYTES, PHOTO_MIME_TYPES } from "@/lib/uploads";
 
@@ -16,13 +16,57 @@ async function writeCaptions(
     style: string,
     idea: string | undefined,
     photo: { bytes: Buffer; mimeType: string },
-    record: (attempt: Attempt) => void
+    record: (attempt: Attempt) => void,
+    count = 3
 ) {
     const image = { base64: photo.bytes.toString("base64"), mimeType: photo.mimeType };
-    if (chain) return runChain(chain, image, idea, record);
-    const prompt = buildPrompt(style, idea);
+    if (chain) return runChain(chain, image, idea, record, count);
+    let prompt = buildPrompt(style, idea);
+    if (count === 1) prompt += " Return only the single strongest caption, as a JSON array with 1 string.";
     const { captions, model } = await captionImage(image.base64, image.mimeType, prompt, record);
-    return { captions, model, prompt };
+    return { captions: captions.slice(0, count), model, prompt };
+}
+
+type NewCaption = { content: string; style: string; model: string; prompt: string };
+
+// Captions for one photo, as rows ready to save.
+// "mix" runs every style's chain at the same time, one caption each, and keeps whichever succeed.
+// A single style writes three captions in that style.
+async function captionsFor(
+    supabase: Supabase,
+    style: string,
+    idea: string | undefined,
+    photo: { bytes: Buffer; mimeType: string },
+    record: (attempt: Attempt) => void
+): Promise<NewCaption[]> {
+    if (style !== MIX_STYLE.id) {
+        const chain = await loadChain(supabase, style);
+        const { captions, model, prompt } = await writeCaptions(chain, style, idea, photo, record);
+        return captions.map((content) => ({ content, style, model, prompt }));
+    }
+
+    const results = await Promise.allSettled(
+        HUMOR_STYLES.map(async (s) => {
+            const chain = await loadChain(supabase, s.id);
+            const { captions, model, prompt } = await writeCaptions(chain, s.id, idea, photo, record, 1);
+            return captions.map((content) => ({ content, style: s.id, model, prompt }));
+        })
+    );
+    const rows = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+    if (rows.length === 0) throw new Error("Every chain in the mix failed");
+    return rows;
+}
+
+// One line for the generation log: which chains ran.
+function describeRun(style: string) {
+    return style === MIX_STYLE.id
+        ? `Chain mix: ${HUMOR_STYLES.map((s) => s.name).join(" + ")}`
+        : `Chain: ${pickStyle(style).name}`;
+}
+
+// What a generation log records as "the model": every model that wrote a caption.
+function modelsUsed(rows: NewCaption[]) {
+    return [...new Set(rows.map((r) => r.model))].join(", ");
 }
 
 // Shared by the welcome form and the profile form.
@@ -124,20 +168,18 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     if (!photo.ok) return photo.error === "type" ? discard("Use a JPEG, PNG or WebP photo under 5 MB.") : { ok: false, error: "Couldn't read the uploaded photo." };
     const { bytes, mimeType } = photo;
 
-    // The humor style and idea steer what Gemini writes.
-    const style = pickStyle(options.style).id;
+    // Every new photo gets the chain mix: one caption from each humor style.
+    // A single style is still available afterwards through Regenerate.
+    const style = options.style && options.style !== MIX_STYLE.id ? pickStyle(options.style).id : MIX_STYLE.id;
     const format: MemeFormat = isFormat(options.format) ? options.format : "top";
-    const chain = await loadChain(supabase, style);
 
     // Logged for the admin panel's generation requests and LLM responses.
     const log = new GenerationLog(supabase);
-    await log.start({ kind: "generate", style, prompt: chain ? `Chain: ${chain.name}` : buildPrompt(style, options.idea) });
+    await log.start({ kind: "generate", style, prompt: describeRun(style) });
 
-    let captions: string[];
-    let model: string;
-    let prompt: string;
+    let rows: NewCaption[];
     try {
-        ({ captions, model, prompt } = await writeCaptions(chain, style, options.idea, { bytes, mimeType }, log.record));
+        rows = await captionsFor(supabase, style, options.idea, { bytes, mimeType }, log.record);
     } catch (error) {
         console.error("generateCaptions:", error);
         await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
@@ -155,10 +197,10 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
         return discard("Couldn't save the photo.");
     }
 
-    // One row per caption, each recording the prompt and model that produced it.
+    // One row per caption, each recording the style, prompt and model that produced it.
     const { error: captionError } = await supabase
         .from("captions")
-        .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
+        .insert(rows.map((row) => ({ image_id: image.id, ...row })));
     if (captionError) {
         // Roll back the just-inserted draft so it (and its photo) aren't left behind.
         await supabase.from("images").delete().eq("id", image.id);
@@ -166,7 +208,7 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
         return discard("Couldn't save the captions.");
     }
 
-    await log.finish({ ok: true, model, captionCount: captions.length, imageId: image.id });
+    await log.finish({ ok: true, model: modelsUsed(rows), captionCount: rows.length, imageId: image.id });
     revalidatePath("/generate");
     return { ok: true, imageId: image.id };
 }
@@ -370,22 +412,16 @@ export async function regenerateCaptions(
     const photo = await readPhoto(supabase, image.storage_path);
     if (!photo.ok) return { ok: false, error: "Couldn't read that photo." };
 
-    const style = pickStyle(options.style ?? image.style).id;
-    const chain = await loadChain(supabase, style);
+    // "mix" reruns every chain; a style id rewrites all the captions in that one style.
+    const wanted = options.style ?? image.style;
+    const style = wanted === MIX_STYLE.id ? MIX_STYLE.id : pickStyle(wanted).id;
 
     const log = new GenerationLog(supabase);
-    await log.start({
-        kind: "regenerate",
-        style,
-        prompt: chain ? `Chain: ${chain.name}` : buildPrompt(style, options.idea),
-        imageId: image.id,
-    });
+    await log.start({ kind: "regenerate", style, prompt: describeRun(style), imageId: image.id });
 
-    let captions: string[];
-    let model: string;
-    let prompt: string;
+    let rows: NewCaption[];
     try {
-        ({ captions, model, prompt } = await writeCaptions(chain, style, options.idea, photo, log.record));
+        rows = await captionsFor(supabase, style, options.idea, photo, log.record);
     } catch (error) {
         console.error("regenerateCaptions:", error);
         await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
@@ -400,12 +436,12 @@ export async function regenerateCaptions(
 
     const { error: insertError } = await supabase
         .from("captions")
-        .insert(captions.map((content) => ({ image_id: image.id, content, prompt, model })));
+        .insert(rows.map((row) => ({ image_id: image.id, ...row })));
     if (insertError) {
         await log.finish({ ok: false, error: "Captions written, but they couldn't be saved." });
         return { ok: false, error: "Couldn't save the new captions." };
     }
-    await log.finish({ ok: true, model, captionCount: captions.length });
+    await log.finish({ ok: true, model: modelsUsed(rows), captionCount: rows.length });
 
     // Remember the style, so the label on the meme matches what wrote it.
     if (style !== image.style) await supabase.from("images").update({ style }).eq("id", image.id);

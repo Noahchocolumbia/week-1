@@ -14,7 +14,7 @@ export type HumorStyle = {
     chaos: number;
 };
 
-// Three styles, one per point on the chaos scale: dry, online, unhinged.
+// Four styles, each its own prompt chain: dry, wistful, online, unhinged.
 export const HUMOR_STYLES: HumorStyle[] = [
     {
         id: "deadpan",
@@ -25,6 +25,16 @@ export const HUMOR_STYLES: HumorStyle[] = [
             "The joke is in what's left unsaid. No slang, no emojis, no exclamation marks.",
         color: "#ffe600",
         chaos: 15,
+    },
+    {
+        id: "sad-college-girl",
+        name: "Sad College Girl",
+        blurb: "Romanticizing a quietly tragic week. Again.",
+        instruction:
+            "Write like a dramatic, self-aware college girl having a quietly tragic week: all lowercase, notes-app or diary " +
+            "energy, ironic melancholy, dramatic about small things. Never about self-harm, eating, or bodies.",
+        color: "#ff5fd2",
+        chaos: 40,
     },
     {
         id: "terminally-online",
@@ -64,8 +74,19 @@ export function pickStyle(id: string | null | undefined) {
     return HUMOR_STYLES.find((s) => s.id === id) ?? HUMOR_STYLES[0];
 }
 
-// For displaying a meme's label: also knows retired styles.
+// A photo generated with the chain mix: one caption from every style. Each caption keeps its own style.
+export const MIX_STYLE: HumorStyle = {
+    id: "mix",
+    name: "Mix",
+    blurb: "One caption from every style.",
+    instruction: "",
+    color: "#f1ede4",
+    chaos: 60,
+};
+
+// For displaying a meme's label: also knows the mix and retired styles.
 export function styleById(id: string | null | undefined) {
+    if (id === MIX_STYLE.id) return MIX_STYLE;
     return HUMOR_STYLES.find((s) => s.id === id) ?? RETIRED_STYLES.find((s) => s.id === id) ?? HUMOR_STYLES[0];
 }
 

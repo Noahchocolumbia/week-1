@@ -25,7 +25,7 @@ export type Meme = {
     ago: string;
 };
 
-type CaptionRow = { id: string; content: string; model: string; edited: boolean };
+type CaptionRow = { id: string; content: string; model: string; edited: boolean; style: string | null };
 type ImageRow = {
     id: string;
     storage_path: string;
@@ -37,7 +37,7 @@ type ImageRow = {
 type ScoreRow = { caption_id: string; score: number; votes: number };
 type VoteRow = { caption_id: string; vote: 1 | -1 };
 
-const IMAGE_FIELDS = "id, storage_path, created_at, style, format, captions(id, content, model, edited)";
+const IMAGE_FIELDS = "id, storage_path, created_at, style, format, captions(id, content, model, edited, style)";
 
 // Every caption's score and vote count, from the aggregate RPC. Shared by the
 // feed, the share page, and the studio so they all build the map the same way.
@@ -78,7 +78,8 @@ function toMeme(
         myVote: voteOf.get(caption.id) ?? 0,
         model: caption.model,
         edited: caption.edited,
-        style: image.style,
+        // Each caption keeps the style that wrote it; older captions use their photo's style.
+        style: caption.style ?? image.style,
         // Headline is the only layout now; older Impact/Subtitle memes show as Headline too.
         format: "top",
         postedAt: image.created_at,

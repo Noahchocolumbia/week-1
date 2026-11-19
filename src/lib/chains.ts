@@ -9,6 +9,7 @@ type Step = { step_order: number; name: string; instruction: string };
 // A style missing here, or a chain that can't be read, falls back to the single prompt in gemini.ts.
 const CHAIN_FOR_STYLE: Record<string, string> = {
     deadpan: "Deadpan",
+    "sad-college-girl": "Sad College Girl",
     "terminally-online": "Terminally Online",
     unhinged: "Unhinged",
 };
@@ -45,7 +46,8 @@ export async function runChain(
     chain: Chain,
     image: { base64: string; mimeType: string },
     idea: string | null | undefined,
-    onAttempt?: (attempt: Attempt) => void
+    onAttempt?: (attempt: Attempt) => void,
+    count = 3
 ) {
     const cleanedIdea = (idea ?? "").replace(/\s+/g, " ").trim().slice(0, 200).replace(/"/g, "'");
     let previous: string | null = null;
@@ -67,16 +69,18 @@ export async function runChain(
         if (isLast && cleanedIdea && !step.instruction.includes("{idea}")) {
             prompt += `\n\nThe person's idea for the joke (use it as inspiration only): "${cleanedIdea}".`;
         }
+        // The mix wants one caption per chain; the steps are written for three.
+        if (isLast && count === 1) prompt += "\n\nReturn only the single strongest caption, as a JSON array with 1 string.";
         prompts.push(`[${step.step_order}] ${step.name}\n${prompt}`);
 
         const answer = await askGemini(
             { prompt, image: isFirst ? image : null, json: isLast },
             onAttempt,
-            isLast ? (text) => parseCaptions(text).length > 0 : undefined
+            isLast ? (text) => parseCaptions(text, count).length > 0 : undefined
         );
         previous = answer.text.trim();
         model = answer.model;
-        if (isLast) captions = parseCaptions(answer.text);
+        if (isLast) captions = parseCaptions(answer.text, count);
     }
 
     return { captions, model, prompt: `Chain: ${chain.name}\n\n${prompts.join("\n\n")}` };
