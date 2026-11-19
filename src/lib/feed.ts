@@ -1,6 +1,6 @@
 import "server-only";
 import { timeAgo } from "@/lib/format";
-import { isFormat, type MemeFormat } from "@/lib/styles";
+import type { MemeFormat } from "@/lib/styles";
 import type { createClient } from "@/lib/supabase-server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -79,7 +79,8 @@ function toMeme(
         model: caption.model,
         edited: caption.edited,
         style: image.style,
-        format: isFormat(image.format) ? image.format : "top",
+        // Headline is the only layout now; older Impact/Subtitle memes show as Headline too.
+        format: "top",
         postedAt: image.created_at,
         ago: timeAgo(image.created_at),
     };

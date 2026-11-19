@@ -42,24 +42,27 @@ export type Attempt = {
 // "Busy" or "slow down" answers that are worth trying again.
 const RETRYABLE = [429, 500, 503];
 
-// Sends one photo to Gemini. Returns the captions and the model that wrote them.
-export async function captionImage(
-    imageBase64: string,
-    mimeType: string,
-    prompt: string = PROMPT,
-    onAttempt?: (attempt: Attempt) => void
-): Promise<{ captions: string[]; model: string }> {
+export type GeminiInput = {
+    prompt: string;
+    // Only the first step of a chain needs the photo.
+    image?: { base64: string; mimeType: string } | null;
+    // Ask for raw JSON instead of prose, so JSON.parse works.
+    json?: boolean;
+};
+
+// One request to Gemini, tried down the ATTEMPTS list until a model gives a usable answer.
+// `accept` decides what "usable" means: any text for a middle step, real captions for a final one.
+export async function askGemini(
+    input: GeminiInput,
+    onAttempt?: (attempt: Attempt) => void,
+    accept: (text: string) => boolean = (text) => text.trim() !== ""
+): Promise<{ text: string; model: string }> {
+    const parts: object[] = [];
+    if (input.image) parts.push({ inline_data: { mime_type: input.image.mimeType, data: input.image.base64 } });
+    parts.push({ text: input.prompt });
     const body = JSON.stringify({
-        contents: [
-            {
-                parts: [
-                    { inline_data: { mime_type: mimeType, data: imageBase64 } },
-                    { text: prompt },
-                ],
-            },
-        ],
-        // Ask for raw JSON instead of prose, so JSON.parse works.
-        generationConfig: { responseMimeType: "application/json" },
+        contents: [{ parts }],
+        ...(input.json ? { generationConfig: { responseMimeType: "application/json" } } : {}),
     });
 
     let lastProblem = "no attempt made";
@@ -113,33 +116,50 @@ export async function captionImage(
         const json = await res.json();
 
         // The model may reply in several parts; keep the answer, skip its "thinking".
-        const parts: Part[] = json.candidates?.[0]?.content?.parts ?? [];
-        const text = parts.filter((p) => !p.thought).map((p) => p.text ?? "").join("") || "[]";
+        const answer: Part[] = json.candidates?.[0]?.content?.parts ?? [];
+        const text = answer.filter((p) => !p.thought).map((p) => p.text ?? "").join("");
 
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(text);
-        } catch {
-            parsed = [];
-        }
-
-        // Never trust the shape of a model's output: keep only real, non-empty strings.
-        const captions = (Array.isArray(parsed) ? parsed : [])
-            .filter((c): c is string => typeof c === "string" && c.trim() !== "")
-            .map((c) => c.trim())
-            .slice(0, 3);
-
+        const usable = accept(text);
         report({
             httpStatus: res.status,
-            ok: captions.length > 0,
+            ok: usable,
             rawText: text.slice(0, 4000),
-            error: captions.length > 0 ? null : "no usable captions",
+            error: usable ? null : "no usable answer",
         });
-        if (captions.length > 0) return { captions, model };
+        if (usable) return { text, model };
 
-        lastProblem = `${model} returned no usable captions`;
+        lastProblem = `${model} returned no usable answer`;
         console.error(`Gemini: ${lastProblem}`);
     }
 
     throw new Error(`Gemini failed: ${lastProblem}`);
+}
+
+// Never trust the shape of a model's output: keep only real, non-empty strings.
+export function parseCaptions(text: string, max = 3): string[] {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text || "[]");
+    } catch {
+        parsed = [];
+    }
+    return (Array.isArray(parsed) ? parsed : [])
+        .filter((c): c is string => typeof c === "string" && c.trim() !== "")
+        .map((c) => c.trim())
+        .slice(0, max);
+}
+
+// Sends one photo to Gemini with one prompt. Returns the captions and the model that wrote them.
+export async function captionImage(
+    imageBase64: string,
+    mimeType: string,
+    prompt: string = PROMPT,
+    onAttempt?: (attempt: Attempt) => void
+): Promise<{ captions: string[]; model: string }> {
+    const { text, model } = await askGemini(
+        { prompt, image: { base64: imageBase64, mimeType }, json: true },
+        onAttempt,
+        (answer) => parseCaptions(answer).length > 0
+    );
+    return { captions: parseCaptions(text), model };
 }

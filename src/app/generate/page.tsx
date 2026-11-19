@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import Studio, { type StudioImage } from "@/components/Studio";
 import { loadScores } from "@/lib/feed";
-import { isFormat } from "@/lib/styles";
 import { getUserAndProfile, hasName, navProps } from "@/lib/supabase-server";
 
 // Gemini can take several seconds, so give the server actions room to finish.
@@ -44,7 +43,8 @@ export default async function GeneratePage({ searchParams }: PageProps<"/generat
         id: row.id,
         url: supabase.storage.from("photos").getPublicUrl(row.storage_path).data.publicUrl,
         style: row.style,
-        format: isFormat(row.format) ? row.format : "top",
+        // Headline is the only layout now; older Impact/Subtitle memes show as Headline too.
+        format: "top",
         published: row.published,
         captions: [...row.captions]
             .sort((a, b) => a.created_at.localeCompare(b.created_at))

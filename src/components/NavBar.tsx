@@ -94,9 +94,6 @@ export default function NavBar({ signedIn = true, avatarUrl = null, initial = "?
                     <div className="header-actions">
                         {signedIn ? (
                             <>
-                                <Link href="/generate" className="btn btn-primary btn-create" title="Warning: may produce content">
-                                    <Plus size={16} aria-hidden="true" /> New meme
-                                </Link>
                                 <form action="/auth/signout" method="post">
                                     <button type="submit" className="signout" title="Touch grass">
                                         Log out

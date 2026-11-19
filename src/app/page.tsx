@@ -6,8 +6,15 @@ import { getUserAndProfile, navProps } from "@/lib/supabase-server";
 
 // The homepage is the feed as a grid: the best memes from the chosen time window, highest score first.
 // The tabs are plain links (?range=week, ?range=all, ...), so they work without any client JavaScript.
-export default async function Home({ searchParams }: { searchParams: Promise<{ range?: string | string[] }> }) {
-    const { range: rangeParam } = await searchParams;
+// Memes per page; "Show 8 more" adds another batch (?show=16, 24, ...).
+const PAGE = 8;
+
+export default async function Home({
+    searchParams,
+}: {
+    searchParams: Promise<{ range?: string | string[]; show?: string | string[] }>;
+}) {
+    const { range: rangeParam, show: showParam } = await searchParams;
 
     const { supabase, user, profile } = await getUserAndProfile();
     const { error, memes } = await loadMemes(supabase, user?.id ?? null);
@@ -18,6 +25,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         ? pickRange(rangeParam)
         : (RANGES.find((r) => postedWithin(memes, r).length > 0) ?? pickRange(undefined));
     const ranked = topMemes(postedWithin(memes, range), memes.length);
+    const requested = Number(Array.isArray(showParam) ? showParam[0] : showParam);
+    const show = Number.isFinite(requested) && requested > PAGE ? Math.ceil(requested / PAGE) * PAGE : PAGE;
+    const visible = ranked.slice(0, show);
     const signedIn = Boolean(user);
 
     return (
@@ -66,9 +76,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
                         </div>
                     ) : (
                         <div className="home-grid">
-                            {ranked.map((meme, index) => (
+                            {visible.map((meme, index) => (
                                 <PostCard key={meme.captionId} meme={meme} signedIn={signedIn} eager={index < 3} />
                             ))}
+                        </div>
+                    )}
+
+                    {visible.length < ranked.length && (
+                        <div className="button-row home-more">
+                            <Link href={`/?range=${range.id}&show=${show + PAGE}`} scroll={false} className="btn">
+                                Show {Math.min(PAGE, ranked.length - visible.length)} more
+                            </Link>
+                            <span className="mono range-count">
+                                {visible.length} of {ranked.length}
+                            </span>
                         </div>
                     )}
 

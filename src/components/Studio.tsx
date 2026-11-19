@@ -7,9 +7,8 @@ import {
     deleteCaption,
     deleteImage,
     generateCaptions,
-    publishImage,
+    publishCaptions,
     regenerateCaptions,
-    setFormat,
     updateCaption,
 } from "@/app/actions";
 import Cooking from "@/components/Cooking";
@@ -18,7 +17,7 @@ import MemeImage from "@/components/MemeImage";
 import { useApp } from "@/components/Providers";
 import ShareControls from "@/components/ShareControls";
 import { createClient } from "@/lib/supabase";
-import { HUMOR_STYLES, MEME_FORMATS, assess, promptQuip, styleById, type MemeFormat } from "@/lib/styles";
+import { HUMOR_STYLES, assess, promptQuip, styleById, type MemeFormat } from "@/lib/styles";
 import { MAX_PHOTO_BYTES, PHOTO_TYPES } from "@/lib/uploads";
 
 export type StudioCaption = { id: string; content: string; edited: boolean; score: number; votes: number };
@@ -52,7 +51,8 @@ export default function Studio({
     const [dragging, setDragging] = useState(false);
     const [idea, setIdea] = useState(initialIdea);
     const [styleId, setStyleId] = useState(HUMOR_STYLES[0].id);
-    const [format, setFormatChoice] = useState<MemeFormat>("top");
+    // Every meme uses the Headline layout (caption bar above the photo).
+    const format: MemeFormat = "top";
     const [cooking, setCooking] = useState<null | { styleId: string }>(null);
     const [error, setError] = useState("");
 
@@ -231,20 +231,6 @@ export default function Studio({
                         </div>
                     </div>
 
-                    <div className="step">
-                        <div className="step-label">
-                            <strong>04 Format</strong>
-                            <span className="mono">{MEME_FORMATS.find((f) => f.id === format)?.hint}</span>
-                        </div>
-                        <div className="segmented" role="group" aria-label="Meme format">
-                            {MEME_FORMATS.map((f) => (
-                                <button key={f.id} type="button" aria-pressed={format === f.id} onClick={() => setFormatChoice(f.id)}>
-                                    {f.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
                     <div className="generate-step">
                         <Magnetic strength={0.12}>
                             <button
@@ -362,6 +348,18 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
 
     const captions = draft.captions;
     const current = captions[Math.min(pick, Math.max(0, captions.length - 1))];
+
+    // Which variations to post. Starts with the one on screen; anything no longer on the draft drops out.
+    const [chosen, setChosen] = useState<Set<string>>(() => new Set(captions[0] ? [captions[0].id] : []));
+    const selected = captions.filter((c) => chosen.has(c.id));
+    function toggle(id: string) {
+        setChosen((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
     const style = styleById(draft.style);
 
     function run(action: () => Promise<{ ok: boolean; error?: string }>, fail: string, done?: () => void) {
@@ -407,15 +405,26 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                         type="button"
                         className="btn btn-primary"
                         disabled={pending || captions.length === 0}
-                        onClick={() =>
-                            run(() => publishImage(draft.id), "couldn't post. Try again.", () => {
-                                toast("Published. The public has been warned.");
-                                onGone();
-                            })
-                        }
-                        title="Each caption goes to the feed as its own meme"
+                        onClick={() => {
+                            if (selected.length === 0) return setError("Error: tick at least one variation to post.");
+                            const all = selected.length === captions.length;
+                            run(() => publishCaptions(draft.id, selected.map((c) => c.id)), "couldn't post. Try again.", () => {
+                                setPick(0);
+                                setEditing(false);
+                                setChosen(new Set());
+                                if (all) {
+                                    toast("Published. The public has been warned.");
+                                    onGone();
+                                } else {
+                                    toast(`Posted ${selected.length}. The rest are still drafts.`);
+                                }
+                            });
+                        }}
+                        title="Each ticked caption goes to the feed as its own meme"
                     >
-                        {captions.length === 1 ? "Post 1 meme" : `Post ${captions.length} memes`}
+                        {selected.length === captions.length && captions.length > 1
+                            ? `Post all ${captions.length}`
+                            : `Post selected (${selected.length})`}
                     </button>
                     {current && <ShareControls captionId={current.id} url={draft.url} caption={current.content} format={draft.format} showLink={false} />}
                     {confirmDelete ? (
@@ -457,8 +466,19 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                     ) : (
                         <div className="variations" role="group" aria-label="Choose a variation">
                             {captions.map((c, i) => (
+                                <div key={c.id} className="variation-row">
+                                <label className="variation-check" title="Post this one">
+                                    <input
+                                        type="checkbox"
+                                        checked={chosen.has(c.id)}
+                                        onChange={() => {
+                                            setError("");
+                                            toggle(c.id);
+                                        }}
+                                        aria-label={`Post variation ${LETTERS[i] ?? i + 1}`}
+                                    />
+                                </label>
                                 <button
-                                    key={c.id}
                                     type="button"
                                     className="variation"
                                     aria-pressed={c.id === current?.id}
@@ -473,6 +493,7 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                                         {c.edited && <span className="mono human-tag"> (edited)</span>}
                                     </span>
                                 </button>
+                                </div>
                             ))}
                         </div>
                     )}
@@ -539,25 +560,6 @@ function Workspace({ draft, onGone }: { draft: StudioImage; onGone: () => void }
                         )}
                     </div>
                 )}
-
-                <div>
-                    <p className="mono" style={{ color: "var(--paper-faint)", marginBottom: 8 }}>
-                        Layout
-                    </p>
-                    <div className="segmented" role="group" aria-label="Meme format">
-                        {MEME_FORMATS.map((f) => (
-                            <button
-                                key={f.id}
-                                type="button"
-                                aria-pressed={draft.format === f.id}
-                                disabled={pending}
-                                onClick={() => run(() => setFormat(draft.id, f.id), "couldn't change the layout.")}
-                            >
-                                {f.name}
-                            </button>
-                        ))}
-                    </div>
-                </div>
 
                 <div>
                     <p className="mono" style={{ color: "var(--paper-faint)", marginBottom: 8 }}>

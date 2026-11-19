@@ -2469,3 +2469,44 @@ html:has(.feed) {
 .home-grid .reaction[aria-pressed="true"] {
   z-index: 1;
 }
+
+
+/* Lab: a checkbox beside each variation picks which ones get posted. */
+.variation-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.variation-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-right: none;
+  background: var(--bg-raised);
+  cursor: pointer;
+}
+
+.variation-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--yellow);
+  cursor: pointer;
+}
+
+.variation-check:has(input:checked) {
+  background: var(--yellow);
+  border-color: var(--yellow);
+}
+
+.variation-check:has(input:checked) input {
+  accent-color: var(--yellow-ink);
+}
+
+
+.home-more {
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 32px;
+}

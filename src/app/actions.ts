@@ -2,11 +2,28 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { buildPrompt, captionImage } from "@/lib/gemini";
+import { loadChain, runChain, type Chain } from "@/lib/chains";
+import { buildPrompt, captionImage, type Attempt } from "@/lib/gemini";
 import { GenerationLog } from "@/lib/genlog";
 import { isFormat, pickStyle, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
 import { MAX_PHOTO_BYTES, PHOTO_MIME_TYPES } from "@/lib/uploads";
+
+// Writes captions for a photo: through the style's prompt chain if it has one (see src/lib/chains.ts),
+// otherwise with one prompt. Returns the prompt text that gets saved with each caption.
+async function writeCaptions(
+    chain: Chain | null,
+    style: string,
+    idea: string | undefined,
+    photo: { bytes: Buffer; mimeType: string },
+    record: (attempt: Attempt) => void
+) {
+    const image = { base64: photo.bytes.toString("base64"), mimeType: photo.mimeType };
+    if (chain) return runChain(chain, image, idea, record);
+    const prompt = buildPrompt(style, idea);
+    const { captions, model } = await captionImage(image.base64, image.mimeType, prompt, record);
+    return { captions, model, prompt };
+}
 
 // Shared by the welcome form and the profile form.
 async function saveNames(formData: FormData) {
@@ -110,16 +127,17 @@ export async function generateCaptions(path: string, options: StudioOptions = {}
     // The humor style and idea steer what Gemini writes.
     const style = pickStyle(options.style).id;
     const format: MemeFormat = isFormat(options.format) ? options.format : "top";
-    const prompt = buildPrompt(style, options.idea);
+    const chain = await loadChain(supabase, style);
 
     // Logged for the admin panel's generation requests and LLM responses.
     const log = new GenerationLog(supabase);
-    await log.start({ kind: "generate", style, prompt });
+    await log.start({ kind: "generate", style, prompt: chain ? `Chain: ${chain.name}` : buildPrompt(style, options.idea) });
 
     let captions: string[];
     let model: string;
+    let prompt: string;
     try {
-        ({ captions, model } = await captionImage(bytes.toString("base64"), mimeType, prompt, log.record));
+        ({ captions, model, prompt } = await writeCaptions(chain, style, options.idea, { bytes, mimeType }, log.record));
     } catch (error) {
         console.error("generateCaptions:", error);
         await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
@@ -232,6 +250,54 @@ export async function publishImage(imageId: string) {
     return { ok: true };
 }
 
+// "Post selected": posts the chosen captions from a draft and keeps the rest as drafts.
+// The chosen captions move onto a published copy of the photo row (same file in Storage),
+// so the draft can keep its other captions for later. Choosing all of them posts the draft itself.
+export async function publishCaptions(imageId: string, captionIds: string[]) {
+    const { supabase, user } = await signedIn();
+    if (!user) return { ok: false };
+    if (typeof imageId !== "string" || !UUID.test(imageId)) return { ok: false };
+    const ids = Array.isArray(captionIds) ? [...new Set(captionIds)] : [];
+    if (ids.length === 0 || !ids.every((id) => typeof id === "string" && UUID.test(id))) return { ok: false };
+
+    const { data: draft } = await supabase
+        .from("images")
+        .select("id, storage_path, style, format, published, captions(id)")
+        .eq("id", imageId)
+        .eq("profile_id", user.id)
+        .maybeSingle<{ id: string; storage_path: string; style: string; format: string; published: boolean; captions: { id: string }[] }>();
+    if (!draft || draft.published) return { ok: false };
+    const onDraft = new Set(draft.captions.map((c) => c.id));
+    if (!ids.every((id) => onDraft.has(id))) return { ok: false };
+
+    // Everything chosen: post the draft itself, nothing to split off.
+    if (ids.length === draft.captions.length) return publishImage(imageId);
+
+    const { data: posted } = await supabase
+        .from("images")
+        .insert({ storage_path: draft.storage_path, style: draft.style, format: draft.format, published: true })
+        .select("id")
+        .single<{ id: string }>();
+    if (!posted) return { ok: false };
+
+    const { data: moved } = await supabase
+        .from("captions")
+        .update({ image_id: posted.id })
+        .in("id", ids)
+        .eq("image_id", draft.id)
+        .select("id");
+    if (!moved || moved.length !== ids.length) {
+        // Put back anything that moved, then remove the copy (not the file: the draft still uses it).
+        if (moved?.length) await supabase.from("captions").update({ image_id: draft.id }).in("id", moved.map((c) => c.id));
+        await supabase.from("images").delete().eq("id", posted.id);
+        return { ok: false };
+    }
+
+    revalidatePath("/generate");
+    revalidateFeed();
+    return { ok: true };
+}
+
 // Deletes one caption (and any votes on it).
 export async function deleteCaption(captionId: string) {
     const { supabase, user } = await signedIn();
@@ -267,8 +333,13 @@ export async function deleteImage(imageId: string) {
         .maybeSingle<{ storage_path: string }>();
     if (!deleted) return { ok: false };
 
-    // Then remove the file itself from Storage.
-    await supabase.storage.from("photos").remove([deleted.storage_path]);
+    // Then remove the file itself from Storage, unless a posted meme still uses it
+    // ("Post this one" gives each posted caption its own row that shares the draft's file).
+    const { count } = await supabase
+        .from("images")
+        .select("id", { count: "exact", head: true })
+        .eq("storage_path", deleted.storage_path);
+    if (!count) await supabase.storage.from("photos").remove([deleted.storage_path]);
 
     revalidatePath("/generate");
     revalidateFeed();
@@ -300,15 +371,21 @@ export async function regenerateCaptions(
     if (!photo.ok) return { ok: false, error: "Couldn't read that photo." };
 
     const style = pickStyle(options.style ?? image.style).id;
-    const prompt = buildPrompt(style, options.idea);
+    const chain = await loadChain(supabase, style);
 
     const log = new GenerationLog(supabase);
-    await log.start({ kind: "regenerate", style, prompt, imageId: image.id });
+    await log.start({
+        kind: "regenerate",
+        style,
+        prompt: chain ? `Chain: ${chain.name}` : buildPrompt(style, options.idea),
+        imageId: image.id,
+    });
 
     let captions: string[];
     let model: string;
+    let prompt: string;
     try {
-        ({ captions, model } = await captionImage(photo.bytes.toString("base64"), photo.mimeType, prompt, log.record));
+        ({ captions, model, prompt } = await writeCaptions(chain, style, options.idea, photo, log.record));
     } catch (error) {
         console.error("regenerateCaptions:", error);
         await log.finish({ ok: false, error: error instanceof Error ? error.message : "Gemini failed" });
