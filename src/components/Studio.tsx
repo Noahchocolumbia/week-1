@@ -69,13 +69,16 @@ export default function Studio({
         };
     }, [preview]);
 
-    function pickFile(next: File | undefined | null) {
+    async function pickFile(next: File | undefined | null) {
         setError("");
         if (!next) return;
-        if (!PHOTO_TYPES[next.type]) return setError("Error: that's not a photo we can read. Use JPEG, PNG or WebP.");
-        if (next.size > MAX_PHOTO_BYTES) return setError("Error: photo exceeds 5 MB. Even memes have limits.");
-        setFile(next);
-        setPreview(URL.createObjectURL(next));
+        // iPhones hand over HEIC files (especially when dragged) and often over 5 MB.
+        // Anything that isn't already a small JPEG/PNG/WebP gets re-saved here as a smaller JPEG.
+        const photo = PHOTO_TYPES[next.type] && next.size <= MAX_PHOTO_BYTES ? next : await toJpeg(next);
+        if (!photo) return setError("Error: that's not a photo we can read. Try a JPEG, PNG or WebP.");
+        if (photo.size > MAX_PHOTO_BYTES) return setError("Error: photo exceeds 5 MB. Even memes have limits.");
+        setFile(photo);
+        setPreview(URL.createObjectURL(photo));
     }
 
     async function onGenerate() {
@@ -142,14 +145,14 @@ export default function Studio({
                                 <img src={preview} alt="The photo you picked" />
                             ) : (
                                 <>
-                                    <strong>Drop a photo</strong>
-                                    <small className="mono">or click to choose. JPEG, PNG, WebP. Max 5 MB.</small>
+                                    <strong>Drop or tap to add a photo</strong>
+                                    <small className="mono">Any photo, including iPhone HEIC. Big ones get shrunk.</small>
                                 </>
                             )}
                             {preview && <small className="mono">Click to swap the photo</small>}
                             <input
                                 type="file"
-                                accept="image/jpeg,image/png,image/webp"
+                                accept="image/*"
                                 className="visually-hidden"
                                 disabled={Boolean(cooking)}
                                 onChange={(e) => {
@@ -607,4 +610,27 @@ function PostedMeme({ image, caption }: { image: StudioImage; caption: StudioCap
             </div>
         </article>
     );
+}
+
+// Re-saves any photo the browser can display (HEIC on iPhone Safari, oversized JPEGs, ...)
+// as a JPEG no bigger than 2000px on its longest side. Returns null if the browser can't read it.
+async function toJpeg(file: File): Promise<File | null> {
+    const url = URL.createObjectURL(file);
+    try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const scale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+        if (!blob) return null;
+        return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+    } catch {
+        return null;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
 }

@@ -6,8 +6,8 @@ import { getUserAndProfile, navProps } from "@/lib/supabase-server";
 
 // The homepage is the feed as a grid: the best memes from the chosen time window, highest score first.
 // The tabs are plain links (?range=week, ?range=all, ...), so they work without any client JavaScript.
-// Memes per page; "Show 8 more" adds another batch (?show=16, 24, ...).
-const PAGE = 8;
+// Memes per page; "Show 9 more" adds another batch (?show=18, 27, ...).
+const PAGE = 9;
 
 export default async function Home({
     searchParams,

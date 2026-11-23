@@ -2185,9 +2185,10 @@ main {
   margin: 0 auto;
 }
 
-/* One meme per screen: every scroll snaps to the next post. */
+/* One meme per screen. "proximity" lets a mouse wheel scroll freely and settles on a post
+   only when you stop near one; "mandatory" snapped small wheel turns back to the same post. */
 html:has(.feed) {
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   scroll-padding-top: 108px;
 }
 
@@ -2201,7 +2202,6 @@ html:has(.feed) {
   flex-direction: column;
   justify-content: center;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
   padding: 12px 0;
 }
 
