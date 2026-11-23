@@ -28,14 +28,14 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                     <div className="checkpoint-body">
                         <h1 className="display wide">Identify yourself.</h1>
                         <p>
-                            Sign in to judge memes and make your own with your Columbia or Barnard Google account
-                            (LionMail). We only use it to know whose bad jokes are whose.
+                            Sign in with any Google account to judge memes and make your own. We only use it to know
+                            whose bad jokes are whose.
                         </p>
                         <GoogleSignInButton />
                         {error === "not_allowed" ? (
                             <p className="form-error" role="alert">
-                                Access denied: new accounts are limited to approved school emails. Sign in with your
-                                LionMail, or ask an admin to whitelist your address.
+                                Access denied: new accounts are limited to approved emails right now. Ask an admin to
+                                whitelist your address.
                             </p>
                         ) : (
                             error && (
