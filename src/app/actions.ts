@@ -45,16 +45,40 @@ async function captionsFor(
         return captions.map((content) => ({ content, style, model, prompt }));
     }
 
+    const started = Date.now();
+    const runStyle = async (styleId: string) => {
+        const chain = await loadChain(supabase, styleId);
+        const { captions, model, prompt } = await writeCaptions(chain, styleId, idea, photo, record, 1);
+        return captions.map((content) => ({ content, style: styleId, model, prompt }));
+    };
+
+    // Start the chains a moment apart instead of all at once: four chains firing together
+    // is twelve Gemini calls in a burst, which trips Gemini's rate limit (HTTP 429).
     const results = await Promise.allSettled(
-        HUMOR_STYLES.map(async (s) => {
-            const chain = await loadChain(supabase, s.id);
-            const { captions, model, prompt } = await writeCaptions(chain, s.id, idea, photo, record, 1);
-            return captions.map((content) => ({ content, style: s.id, model, prompt }));
+        HUMOR_STYLES.map(async (s, i) => {
+            await new Promise((resolve) => setTimeout(resolve, i * 700));
+            return runStyle(s.id);
         })
     );
     const rows = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+
+    // Any chain that failed gets one more try, one at a time, so the mix still ends up
+    // with one caption per style. Skipped if time is running short (the page allows 60s).
+    const failed = HUMOR_STYLES.filter((_, i) => results[i].status === "rejected");
+    for (const s of failed) {
+        if (Date.now() - started > 25_000) break;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        try {
+            rows.push(...(await runStyle(s.id)));
+        } catch (error) {
+            console.error(`Chain mix: ${s.name} failed twice`, error);
+        }
+    }
+
     if (rows.length === 0) throw new Error("Every chain in the mix failed");
-    return rows;
+    // Keep the styles in their usual order even when a retry finished last.
+    const order = HUMOR_STYLES.map((s) => s.id);
+    return rows.sort((a, b) => order.indexOf(a.style) - order.indexOf(b.style));
 }
 
 // One line for the generation log: which chains ran.

@@ -68,10 +68,14 @@ export async function askGemini(
     let lastProblem = "no attempt made";
     const timedOut = new Set<string>();
     let tries = 0;
+    // A 429 ("slow down") needs a longer pause than a 503 ("busy"): retrying a second later
+    // just hits the same rate limit again, especially when four chains are running at once.
+    let waitMs = 1000;
 
     for (const model of ATTEMPTS) {
         if (timedOut.has(model)) continue;
-        if (tries > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (tries > 0) await new Promise((resolve) => setTimeout(resolve, waitMs + Math.random() * 500));
+        waitMs = 1000;
         const attempt = ++tries;
         const started = Date.now();
         const report = (fields: Omit<Attempt, "model" | "attempt" | "latencyMs">) =>
@@ -109,6 +113,7 @@ export async function askGemini(
                 error: `HTTP ${res.status}`,
             });
             console.error(`Gemini: ${lastProblem}`);
+            if (res.status === 429) waitMs = 3000;
             if (RETRYABLE.includes(res.status)) continue;
             break; // A bad key or bad request won't improve by retrying.
         }
