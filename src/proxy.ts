@@ -40,7 +40,7 @@ export async function proxy(request: NextRequest) {
     if (!user && isProtected) {
         const url = request.nextUrl.clone();
         url.pathname = "/login";
-        url.search = "";
+        url.search = `?next=${encodeURIComponent(path)}`;
         return NextResponse.redirect(url);
     }
 

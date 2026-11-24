@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { AFTER_LOGIN_COOKIE, safeNext } from "@/lib/after-login";
 import { createClient, hasName, type Profile } from "@/lib/supabase-server";
 
 // Google -> Supabase -> here, with a one-time ?code= in the URL.
@@ -31,6 +33,13 @@ export async function GET(request: Request) {
         .eq("id", data.user.id)
         .maybeSingle<Profile>();
 
-    // First-time users have no name yet, so ask for it.
-    return NextResponse.redirect(`${base}${hasName(profile) ? "/rate" : "/welcome"}`);
+    // First-time users have no name yet, so ask for it (the welcome form sends them on after).
+    if (!hasName(profile)) return NextResponse.redirect(`${base}/welcome`);
+
+    // Back to the page they were on, or the homepage.
+    const jar = await cookies();
+    const goTo = safeNext(decodeURIComponent(jar.get(AFTER_LOGIN_COOKIE)?.value ?? ""));
+    const response = NextResponse.redirect(`${base}${goTo}`);
+    response.cookies.delete(AFTER_LOGIN_COOKIE);
+    return response;
 }

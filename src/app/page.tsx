@@ -69,7 +69,7 @@ export default async function Home({
                                         See all time
                                     </Link>
                                 )}
-                                <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary">
+                                <Link href="/generate" className="btn btn-primary">
                                     Make one
                                 </Link>
                             </div>
@@ -93,7 +93,7 @@ export default async function Home({
                         </div>
                     )}
 
-                    <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary generate-fab">
+                    <Link href="/generate" className="btn btn-primary generate-fab">
                         Generate captions
                     </Link>
                 </div>

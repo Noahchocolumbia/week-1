@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AFTER_LOGIN_COOKIE, safeNext } from "@/lib/after-login";
 import { completeWelcome } from "@/app/actions";
 import NameFields from "@/components/NameFields";
 import NavBar from "@/components/NavBar";
@@ -9,7 +11,7 @@ export const metadata = { title: "Welcome · Laugh or Laugh" };
 export default async function WelcomePage({ searchParams }: PageProps<"/welcome">) {
     const { supabase, user, profile } = await getUserAndProfile();
     if (!user) redirect("/login");
-    if (hasName(profile)) redirect("/rate");
+    if (hasName(profile)) redirect(safeNext(decodeURIComponent((await cookies()).get(AFTER_LOGIN_COOKIE)?.value ?? "")));
 
     const { error } = await searchParams;
 

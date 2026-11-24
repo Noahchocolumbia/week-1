@@ -37,7 +37,7 @@ export function HeroCTA({ signedIn }: { signedIn: boolean }) {
     return (
         <div className="hero-cta">
             <Magnetic>
-                <Link href={signedIn ? "/generate" : "/login"} className="btn btn-primary btn-big" title="Point of no return">
+                <Link href="/generate" className="btn btn-primary btn-big" title="Point of no return">
                     Generate brainrot →
                 </Link>
             </Magnetic>

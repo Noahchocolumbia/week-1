@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import Magnetic from "@/components/Magnetic";
+import { AFTER_LOGIN_COOKIE } from "@/lib/after-login";
 import { createClient } from "@/lib/supabase";
 
-export default function GoogleSignInButton() {
+export default function GoogleSignInButton({ next = "/" }: { next?: string }) {
     const [going, setGoing] = useState(false);
     const [error, setError] = useState("");
 
     async function signIn() {
         setGoing(true);
         setError("");
+        // Remember where to land after Google sends them back (read in /auth/callback).
+        document.cookie = `${AFTER_LOGIN_COOKIE}=${encodeURIComponent(next)}; path=/; max-age=600; samesite=lax`;
         const supabase = createClient();
         try {
             // On success this redirects away, so `going` stays true until navigation.

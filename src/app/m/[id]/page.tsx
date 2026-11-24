@@ -71,7 +71,7 @@ export default async function MemePage({ params }: PageProps<"/m/[id]">) {
                             <Link href={user ? "/rate" : "/top"} className="btn">
                                 {user ? "Back to the feed" : "See the Hall of Shame"}
                             </Link>
-                            <Link href={user ? "/generate" : "/login"} className="btn btn-primary">
+                            <Link href="/generate" className="btn btn-primary">
                                 Make your own
                             </Link>
                         </div>

@@ -2,15 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import NavBar from "@/components/NavBar";
+import { safeNext } from "@/lib/after-login";
 import { getUserAndProfile } from "@/lib/supabase-server";
 
 export const metadata = { title: "Sign in · Laugh or Laugh" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     const { user } = await getUserAndProfile();
-    if (user) redirect("/rate");
-
-    const { error } = await searchParams;
+    const { error, next } = await searchParams;
+    const goTo = safeNext(typeof next === "string" ? next : null);
+    if (user) redirect(goTo);
 
     return (
         <>
@@ -31,7 +32,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                             Sign in with any Google account to judge memes and make your own. We only use it to know
                             whose bad jokes are whose.
                         </p>
-                        <GoogleSignInButton />
+                        <GoogleSignInButton next={goTo} />
                         {error === "not_allowed" ? (
                             <p className="form-error" role="alert">
                                 Access denied: new accounts are limited to approved emails right now. Ask an admin to

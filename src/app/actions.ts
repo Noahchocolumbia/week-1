@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { loadChain, runChain, type Chain } from "@/lib/chains";
 import { buildPrompt, captionImage, type Attempt } from "@/lib/gemini";
+import { AFTER_LOGIN_COOKIE, safeNext } from "@/lib/after-login";
 import { GenerationLog } from "@/lib/genlog";
 import { HUMOR_STYLES, isFormat, MIX_STYLE, pickStyle, type MemeFormat } from "@/lib/styles";
 import { createClient } from "@/lib/supabase-server";
@@ -116,7 +118,11 @@ async function saveNames(formData: FormData) {
 
 export async function completeWelcome(formData: FormData) {
     const ok = await saveNames(formData);
-    redirect(ok ? "/rate" : "/welcome?error=1");
+    if (!ok) redirect("/welcome?error=1");
+    const jar = await cookies();
+    const goTo = safeNext(decodeURIComponent(jar.get(AFTER_LOGIN_COOKIE)?.value ?? ""));
+    jar.delete(AFTER_LOGIN_COOKIE);
+    redirect(goTo);
 }
 
 export async function updateProfile(formData: FormData) {
