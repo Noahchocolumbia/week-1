@@ -42,6 +42,11 @@ export type Attempt = {
 // "Busy" or "slow down" answers that are worth trying again.
 const RETRYABLE = [429, 500, 503];
 
+// Models whose free-tier DAILY quota is used up, and until when to leave them alone.
+// Retrying those only burns time before the fallback model, so skip them for an hour.
+// (Lives for as long as the server instance stays warm, which covers back-to-back Generates.)
+const outOfQuotaUntil = new Map<string, number>();
+
 export type GeminiInput = {
     prompt: string;
     // Only the first step of a chain needs the photo.
@@ -74,6 +79,7 @@ export async function askGemini(
 
     for (const model of ATTEMPTS) {
         if (timedOut.has(model)) continue;
+        if ((outOfQuotaUntil.get(model) ?? 0) > Date.now()) continue;
         if (tries > 0) await new Promise((resolve) => setTimeout(resolve, waitMs + Math.random() * 500));
         waitMs = 1000;
         const attempt = ++tries;
@@ -106,13 +112,20 @@ export async function askGemini(
 
         if (!res.ok) {
             lastProblem = `${model} answered ${res.status}`;
+            const errorText = (await res.text().catch(() => "")).slice(0, 2000);
             report({
                 httpStatus: res.status,
                 ok: false,
-                rawText: (await res.text().catch(() => "")).slice(0, 2000) || null,
+                rawText: errorText || null,
                 error: `HTTP ${res.status}`,
             });
             console.error(`Gemini: ${lastProblem}`);
+            if (res.status === 429 && /PerDay/i.test(errorText)) {
+                // Daily limit: no point waiting or retrying this model today. Go straight to the next one.
+                outOfQuotaUntil.set(model, Date.now() + 60 * 60 * 1000);
+                waitMs = 0;
+                continue;
+            }
             if (res.status === 429) waitMs = 3000;
             if (RETRYABLE.includes(res.status)) continue;
             break; // A bad key or bad request won't improve by retrying.
