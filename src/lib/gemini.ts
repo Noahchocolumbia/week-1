@@ -43,7 +43,7 @@ export type Attempt = {
 const RETRYABLE = [429, 500, 503];
 
 // Models whose free-tier DAILY quota is used up, and until when to leave them alone.
-// Retrying those only burns time before the fallback model, so skip them for an hour.
+// Retrying those only burns time before the fallback model, so skip them for two minutes (short, so a newly paid key works right away).
 // (Lives for as long as the server instance stays warm, which covers back-to-back Generates.)
 const outOfQuotaUntil = new Map<string, number>();
 
@@ -122,7 +122,7 @@ export async function askGemini(
             console.error(`Gemini: ${lastProblem}`);
             if (res.status === 429 && /PerDay/i.test(errorText)) {
                 // Daily limit: no point waiting or retrying this model today. Go straight to the next one.
-                outOfQuotaUntil.set(model, Date.now() + 60 * 60 * 1000);
+                outOfQuotaUntil.set(model, Date.now() + 2 * 60 * 1000);
                 waitMs = 0;
                 continue;
             }
